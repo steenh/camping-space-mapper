@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Camping Space Mapper</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; display: flex; height: 100vh; overflow: hidden; background: #0f172a; }
+
+    #map { flex: 1; }
+
+    #panel {
+      width: 300px;
+      background: #1e293b;
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      border-left: 1px solid #334155;
+    }
+
+    #panel-header {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid #334155;
+    }
+    #panel-header h1 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #f8fafc;
+      letter-spacing: 0.3px;
+    }
+    #panel-header p {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: 3px;
+    }
+
+    .section {
+      padding: 14px 20px;
+      border-bottom: 1px solid #334155;
+    }
+    .section-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 10px;
+    }
+
+    .instruction-step {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .step-num {
+      width: 20px;
+      height: 20px;
+      background: #3b82f6;
+      border-radius: 50%;
+      font-size: 0.7rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-text {
+      font-size: 0.8rem;
+      color: #cbd5e1;
+      line-height: 1.4;
+      padding-top: 2px;
+    }
+
+    .field { margin-bottom: 10px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label {
+      display: block;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+    .field input[type=number] {
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 5px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #f1f5f9;
+      font-size: 0.85rem;
+    }
+    .field input[type=number]:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    .btn-row { display: flex; gap: 8px; }
+    .btn {
+      flex: 1;
+      padding: 9px 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-primary:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+    .btn-secondary { background: #334155; color: #cbd5e1; }
+    .btn-secondary:hover { background: #475569; }
+    .btn-danger { background: #991b1b; color: #fca5a5; }
+    .btn-danger:hover { background: #7f1d1d; }
+    .btn-optimize { background: #065f46; color: #6ee7b7; }
+    .btn-optimize:hover { background: #047857; }
+    .btn-optimize:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+
+    #status-bar {
+      padding: 10px 20px;
+      font-size: 0.78rem;
+      min-height: 38px;
+      color: #fbbf24;
+      background: #0f172a;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #status-bar.ok { color: #34d399; }
+    #status-bar.info { color: #60a5fa; }
+    #spinner { display: none; }
+    #spinner.active { display: inline-block; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .stat-card {
+      background: #0f172a;
+      border-radius: 6px;
+      padding: 10px 12px;
+      border: 1px solid #334155;
+    }
+    .stat-card-label {
+      font-size: 0.68rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .stat-card-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #34d399;
+      margin-top: 2px;
+    }
+    .stat-card-value.neutral { color: #94a3b8; }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+    .legend-swatch {
+      width: 18px;
+      height: 12px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    #optimal-badge {
+      display: none;
+      background: #065f46;
+      color: #6ee7b7;
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-left: 6px;
+    }
+
+    .specs-list {
+      list-style: none;
+    }
+    .specs-list li {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      padding: 3px 0;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      justify-content: space-between;
+    }
+    .specs-list li span { color: #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="panel">
+    <div id="panel-header">
+      <h1>Camping Space Mapper</h1>
+      <p>Calculate optimal camping layout</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">How to use</div>
+      <div class="instruction-step">
+        <div class="step-num">1</div>
+        <div class="step-text">Navigate to your location on the aerial photo</div>
+      </div>
+      <div class="instruction-step">
+        <div class="step-num">2</div>
+        <div class="step-text">Click the polygon tool <strong>(pentagon icon)</strong> on the map and draw your area</div>
+      </div>
+      <div class="instruction-step">
+        <div class="step-num">3</div>
+        <div class="step-text">Click <strong>Calculate</strong> or <strong>Optimize</strong> to find the best layout</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Layout settings</div>
+      <div class="field">
+        <label>Rotation angle (°) — 0 = N/S aligned</label>
+        <input type="number" id="rotation" value="0" min="0" max="89" step="1" />
+      </div>
+      <div class="field">
+        <label>Grid offset X (m) — shift columns (0–54)</label>
+        <input type="number" id="offsetX" value="0" min="0" max="54" step="1" />
+      </div>
+      <div class="field">
+        <label>Grid offset Y (m) — shift rows (0–24)</label>
+        <input type="number" id="offsetY" value="0" min="0" max="24" step="1" />
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="btn-row" style="margin-bottom: 8px;">
+        <button class="btn btn-primary" id="calcBtn" onclick="calculate()" disabled>Calculate</button>
+        <button class="btn btn-optimize" id="optBtn" onclick="optimize()" disabled>Optimize</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-danger" onclick="clearAll()">Clear all</button>
+      </div>
+    </div>
+
+    <div id="status-bar">
+      <svg id="spinner" width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <circle cx="7" cy="7" r="5.5" stroke="#64748b" stroke-width="2"/>
+        <path d="M7 1.5A5.5 5.5 0 0 1 12.5 7" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span id="status-text">Draw a polygon to get started.</span>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Results <span id="optimal-badge">OPTIMAL</span></div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-card-label">Total spaces</div>
+          <div class="stat-card-value neutral" id="totalSpaces">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Groups placed</div>
+          <div class="stat-card-value neutral" id="totalBlocks">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Area (m²)</div>
+          <div class="stat-card-value neutral" id="totalArea">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Best rotation</div>
+          <div class="stat-card-value neutral" id="bestRot">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Specifications</div>
+      <ul class="specs-list">
+        <li>Space size <span>5 × 10 m</span></li>
+        <li>Block formation <span>1–10 cols × 2 rows</span></li>
+        <li>Max block size <span>50 × 20 m</span></li>
+        <li>Max per block <span>20 spaces</span></li>
+        <li>Path width <span>5 m</span></li>
+        <li>Row height step <span>25 m</span></li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Legend</div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#4ade80; border: 1px solid #16a34a;"></div>
+        Camping space (5×10 m)
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:none; border: 2px dashed #fbbf24;"></div>
+        Group outline (1–10 cols × 2 rows)
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:rgba(251,191,36,0.15); border: 2px solid #fbbf24;"></div>
+        Drawn polygon
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+  <script>
+    // ── Constants ─────────────────────────────────────────────────────────────
+    const SPACE_W  = 5;   // m, width of one camping space
+    const SPACE_H  = 10;  // m, height of one camping space
+    const COLS     = 10;  // spaces per row in a block
+    const ROWS     = 2;   // rows per block
+    const BLOCK_W  = COLS * SPACE_W;  // 50 m
+    const BLOCK_H  = ROWS * SPACE_H;  // 20 m
+    const PATH_W   = 5;   // m, path between blocks
+    const STEP_X   = BLOCK_W + PATH_W; // 55 m
+    const STEP_Y   = BLOCK_H + PATH_W; // 25 m
+
+    // ── Map setup ─────────────────────────────────────────────────────────────
+    const map = L.map('map', { zoomControl: true }).setView([52.25, 5.5], 13);
+
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      {
+        attribution: 'Imagery © Esri',
+        maxZoom: 21,
+        maxNativeZoom: 19
+      }
+    ).addTo(map);
+
+    // Labels overlay (roads, place names) on top of satellite
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 21, maxNativeZoom: 19, opacity: 0.7 }
+    ).addTo(map);
+
+    const drawnItems = new L.FeatureGroup().addTo(map);
+    const spacesLayer = new L.FeatureGroup().addTo(map);
+
+    const drawControl = new L.Control.Draw({
+      draw: {
+        polygon: {
+          allowIntersection: false,
+          showArea: true,
+          shapeOptions: {
+            color: '#fbbf24',
+            fillColor: '#fbbf24',
+            fillOpacity: 0.12,
+            weight: 2
+          }
+        },
+        rectangle: false, circle: false, circlemarker: false,
+        marker: false, polyline: false
+      },
+      edit: { featureGroup: drawnItems }
+    });
+    map.addControl(drawControl);
+
+    let drawnPolygon = null;
+
+    map.on(L.Draw.Event.CREATED, e => {
+      drawnItems.clearLayers();
+      drawnPolygon = e.layer;
+      drawnItems.addLayer(drawnPolygon);
+
+      const area = turf.area(drawnPolygon.toGeoJSON());
+      document.getElementById('totalArea').textContent = Math.round(area).toLocaleString('nl-NL');
+      document.getElementById('calcBtn').disabled = false;
+      document.getElementById('optBtn').disabled = false;
+      setStatus('Polygon drawn. Click Calculate or Optimize.', 'info');
+      clearResults();
+    });
+
+    map.on(L.Draw.Event.EDITED, () => {
+      if (drawnItems.getLayers().length > 0) {
+        drawnPolygon = drawnItems.getLayers()[0];
+        const area = turf.area(drawnPolygon.toGeoJSON());
+        document.getElementById('totalArea').textContent = Math.round(area).toLocaleString('nl-NL');
+        spacesLayer.clearLayers();
+        clearResults();
+        setStatus('Polygon edited. Recalculate to update.', 'info');
+      }
+    });
+
+    map.on(L.Draw.Event.DELETED, () => {
+      drawnPolygon = null;
+      clearAll();
+    });
+
+    // ── Coordinate helpers ────────────────────────────────────────────────────
+    function getFactors(centLat) {
+      const mPerLat = 111320;
+      const mPerLng = 111320 * Math.cos(centLat * Math.PI / 180);
+      return { mPerLat, mPerLng };
+    }
+
+    function toLocal(lat, lng, cLat, cLng, f) {
+      return { x: (lng - cLng) * f.mPerLng, y: (lat - cLat) * f.mPerLat };
+    }
+
+    function toGeo(x, y, cLat, cLng, f) {
+      // Returns [lat, lng] for Leaflet
+      return [cLat + y / f.mPerLat, cLng + x / f.mPerLng];
+    }
+
+    // ── Geometry helpers ──────────────────────────────────────────────────────
+    // Variable-width block corners (w = ncols * SPACE_W)
+    function blockCorners(ox, oy, w, rad) {
+      const cos = Math.cos(rad), sin = Math.sin(rad);
+      return [
+        { x: ox,                              y: oy },
+        { x: ox + w * cos,                    y: oy + w * sin },
+        { x: ox + w * cos - BLOCK_H * sin,    y: oy + w * sin + BLOCK_H * cos },
+        { x: ox - BLOCK_H * sin,              y: oy + BLOCK_H * cos }
+      ];
+    }
+
+    function spaceCorners(ox, oy, col, row, rad) {
+      const cos = Math.cos(rad), sin = Math.sin(rad);
+      const lx = col * SPACE_W, ly = row * SPACE_H;
+      return [
+        { x: ox + lx * cos - ly * sin,                     y: oy + lx * sin + ly * cos },
+        { x: ox + (lx + SPACE_W) * cos - ly * sin,          y: oy + (lx + SPACE_W) * sin + ly * cos },
+        { x: ox + (lx + SPACE_W) * cos - (ly + SPACE_H) * sin, y: oy + (lx + SPACE_W) * sin + (ly + SPACE_H) * cos },
+        { x: ox + lx * cos - (ly + SPACE_H) * sin,          y: oy + lx * sin + (ly + SPACE_H) * cos }
+      ];
+    }
+
+    function pointInPoly(px, py, poly) {
+      let inside = false;
+      const n = poly.length;
+      for (let i = 0, j = n - 1; i < n; j = i++) {
+        const xi = poly[i].x, yi = poly[i].y;
+        const xj = poly[j].x, yj = poly[j].y;
+        if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi))
+          inside = !inside;
+      }
+      return inside;
+    }
+
+    function segmentsIntersect(ax, ay, bx, by, cx, cy, dx, dy) {
+      const d1x = bx - ax, d1y = by - ay;
+      const d2x = dx - cx, d2y = dy - cy;
+      const cross = d1x * d2y - d1y * d2x;
+      if (Math.abs(cross) < 1e-10) return false;
+      const t = ((cx - ax) * d2y - (cy - ay) * d2x) / cross;
+      const u = ((cx - ax) * d1y - (cy - ay) * d1x) / cross;
+      return t > 1e-10 && t < 1 - 1e-10 && u > 1e-10 && u < 1 - 1e-10;
+    }
+
+    function isBlockInside(corners, poly) {
+      // All corners must be inside
+      for (const c of corners) {
+        if (!pointInPoly(c.x, c.y, poly)) return false;
+      }
+      // No edge of block crosses any edge of poly
+      const n = poly.length;
+      for (let bi = 0; bi < corners.length; bi++) {
+        const ba = corners[bi], bb = corners[(bi + 1) % corners.length];
+        for (let pi = 0; pi < n; pi++) {
+          const pa = poly[pi], pb = poly[(pi + 1) % n];
+          if (segmentsIntersect(ba.x, ba.y, bb.x, bb.y, pa.x, pa.y, pb.x, pb.y))
+            return false;
+        }
+      }
+      return true;
+    }
+
+    // ── Core placement algorithm ──────────────────────────────────────────────
+    // Row-by-row greedy sweep: at each position try widths 10→1 (ncols),
+    // place the widest that fits, then jump past it + path.
+    function runPlacement(polygon, angleDeg, offX, offY) {
+      const geo = polygon.toGeoJSON();
+      const cent = turf.centroid(geo).geometry.coordinates; // [lng, lat]
+      const cLng = cent[0], cLat = cent[1];
+      const f = getFactors(cLat);
+
+      // Convert polygon to local metres (skip closing duplicate vertex)
+      const rawCoords = geo.geometry.coordinates[0];
+      const polyLocal = rawCoords.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
+
+      const xs = polyLocal.map(c => c.x), ys = polyLocal.map(c => c.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const polyW = maxX - minX, polyH = maxY - minY;
+
+      const rad = angleDeg * Math.PI / 180;
+      const cos = Math.cos(rad), sin = Math.sin(rad);
+
+      // Unit vectors along column (ux) and row (uy) directions
+      const ux = { x: cos,  y: sin };   // 1 m in column direction
+      const uy = { x: -sin, y: cos };   // 1 m in row direction
+
+      // Sweep range covers the full polygon diagonal with margin
+      const diag = Math.sqrt(polyW * polyW + polyH * polyH) + 100;
+      const nRows = Math.ceil(diag / STEP_Y) + 4;
+
+      // Centre of polygon bounding box
+      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+
+      const blocks = [];
+
+      for (let rowIdx = 0; rowIdx < nRows; rowIdx++) {
+        // Row band Y-offset from centre (user offY shifts the whole grid)
+        const rowDist = -diag / 2 + rowIdx * STEP_Y + offY;
+
+        // Base point for this row
+        const rowBX = cx + rowDist * uy.x;
+        const rowBY = cy + rowDist * uy.y;
+
+        // Greedy X sweep along column direction
+        let xDist = -diag / 2 + offX;
+
+        while (xDist < diag / 2) {
+          const ox = rowBX + xDist * ux.x;
+          const oy = rowBY + xDist * ux.y;
+
+          let placed = false;
+          // Try widths from maximum (10 cols) down to minimum (1 col)
+          for (let ncols = COLS; ncols >= 1; ncols--) {
+            const w = ncols * SPACE_W;
+            if (isBlockInside(blockCorners(ox, oy, w, rad), polyLocal)) {
+              blocks.push({ ox, oy, ncols });
+              xDist += w + PATH_W;  // jump past placed block + path
+              placed = true;
+              break;
+            }
+          }
+
+          if (!placed) {
+            xDist += SPACE_W;  // no block fits here; try 5 m further
+          }
+        }
+      }
+
+      return { blocks, rad, cLat, cLng, f };
+    }
+
+    // ── Render helpers ────────────────────────────────────────────────────────
+    function totalSpacesOf(blocks) {
+      return blocks.reduce((s, b) => s + b.ncols * ROWS, 0);
+    }
+
+    function renderBlocks(result) {
+      spacesLayer.clearLayers();
+      const { blocks, rad, cLat, cLng, f } = result;
+
+      for (const { ox, oy, ncols } of blocks) {
+        // Individual spaces (only up to ncols wide)
+        for (let row = 0; row < ROWS; row++) {
+          for (let col = 0; col < ncols; col++) {
+            const corners = spaceCorners(ox, oy, col, row, rad);
+            const latLngs = corners.map(c => toGeo(c.x, c.y, cLat, cLng, f));
+            L.polygon(latLngs, {
+              color: '#16a34a',
+              fillColor: '#4ade80',
+              fillOpacity: 0.75,
+              weight: 1
+            }).addTo(spacesLayer);
+          }
+        }
+        // Block outline (width = ncols * SPACE_W)
+        const corners = blockCorners(ox, oy, ncols * SPACE_W, rad);
+        const latLngs = corners.map(c => toGeo(c.x, c.y, cLat, cLng, f));
+        L.polygon(latLngs, {
+          color: '#fbbf24',
+          fillOpacity: 0,
+          weight: 2,
+          dashArray: '6 4'
+        }).addTo(spacesLayer);
+      }
+    }
+
+    // ── UI actions ────────────────────────────────────────────────────────────
+    function calculate(silent = false) {
+      if (!drawnPolygon) return;
+      if (!silent) setStatus('Calculating…', 'busy');
+
+      const angleDeg = parseFloat(document.getElementById('rotation').value) || 0;
+      const offX     = parseFloat(document.getElementById('offsetX').value)  || 0;
+      const offY     = parseFloat(document.getElementById('offsetY').value)  || 0;
+
+      // Small timeout so the status bar renders before heavy computation
+      setTimeout(() => {
+        const result = runPlacement(drawnPolygon, angleDeg, offX, offY);
+        renderBlocks(result);
+
+        const count = result.blocks.length;
+        const spaces = totalSpacesOf(result.blocks);
+        document.getElementById('totalSpaces').textContent = spaces.toLocaleString('nl-NL');
+        document.getElementById('totalBlocks').textContent = count;
+        document.getElementById('bestRot').textContent = angleDeg + '°';
+        document.getElementById('optimal-badge').style.display = 'none';
+
+        if (!silent) {
+          setStatus(
+            spaces > 0
+              ? `${count} group${count !== 1 ? 's' : ''} placed → ${spaces} camping spaces.`
+              : 'Nothing fits yet. Try a larger area or different rotation.',
+            spaces > 0 ? 'ok' : ''
+          );
+        }
+      }, 30);
+    }
+
+    function optimize() {
+      if (!drawnPolygon) return;
+      setStatus('Optimizing rotation & offset…', 'busy');
+
+      setTimeout(() => {
+        let best = { spaces: -1, angleDeg: 0, offX: 0, offY: 0 };
+
+        // Try all angles 0–89° with a coarse Y-offset grid.
+        // X offset has less impact with the greedy sweep, but we sample a few values.
+        const offsetStepsX = [0, 11, 22, 33, 44];
+        const offsetStepsY = [0, 5, 10, 15, 20];
+
+        for (let a = 0; a < 90; a++) {
+          for (const ox of offsetStepsX) {
+            for (const oy of offsetStepsY) {
+              const result = runPlacement(drawnPolygon, a, ox, oy);
+              const spaces = totalSpacesOf(result.blocks);
+              if (spaces > best.spaces) {
+                best = { spaces, angleDeg: a, offX: ox, offY: oy };
+              }
+            }
+          }
+        }
+
+        // Apply best settings
+        document.getElementById('rotation').value = best.angleDeg;
+        document.getElementById('offsetX').value  = best.offX;
+        document.getElementById('offsetY').value  = best.offY;
+
+        const result = runPlacement(drawnPolygon, best.angleDeg, best.offX, best.offY);
+        renderBlocks(result);
+
+        const count = result.blocks.length;
+        const spaces = totalSpacesOf(result.blocks);
+        document.getElementById('totalSpaces').textContent = spaces.toLocaleString('nl-NL');
+        document.getElementById('totalBlocks').textContent = count;
+        document.getElementById('bestRot').textContent = best.angleDeg + '°';
+        document.getElementById('optimal-badge').style.display = 'inline';
+
+        setStatus(
+          spaces > 0
+            ? `Optimal: ${count} groups (${spaces} spaces) at ${best.angleDeg}°.`
+            : 'Nothing fits. Try a larger polygon.',
+          spaces > 0 ? 'ok' : ''
+        );
+      }, 30);
+    }
+
+    function clearAll() {
+      drawnItems.clearLayers();
+      spacesLayer.clearLayers();
+      drawnPolygon = null;
+      document.getElementById('calcBtn').disabled = true;
+      document.getElementById('optBtn').disabled = true;
+      clearResults();
+      setStatus('Draw a polygon to get started.', '');
+    }
+
+    function clearResults() {
+      document.getElementById('totalSpaces').textContent = '—';
+      document.getElementById('totalBlocks').textContent = '—';
+      document.getElementById('bestRot').textContent = '—';
+      document.getElementById('optimal-badge').style.display = 'none';
+      document.getElementById('totalSpaces').className = 'stat-card-value neutral';
+      document.getElementById('totalBlocks').className = 'stat-card-value neutral';
+    }
+
+    function setStatus(msg, type) {
+      const bar = document.getElementById('status-bar');
+      const spin = document.getElementById('spinner');
+      bar.className = type === 'ok' ? 'ok' : type === 'info' ? 'info' : '';
+      document.getElementById('status-text').textContent = msg;
+      spin.className = type === 'busy' ? 'active' : '';
+    }
+  </script>
+</body>
+</html>
