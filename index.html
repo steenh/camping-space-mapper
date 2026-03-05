@@ -403,6 +403,10 @@
           <button class="btn btn-secondary" id="arcClearBtn" onclick="clearArcSelection()" style="display:none;">Clear selection</button>
         </div>
         <div id="arcFeatureCount" style="font-size:0.73rem;color:#f97316;margin-bottom:8px;min-height:1em;"></div>
+        <div class="field" style="margin-bottom:8px;">
+          <label>Boundary tightness — max edge (m) <span style="color:#64748b;font-size:0.68rem;">smaller = tighter</span></label>
+          <input type="number" id="arcMaxEdge" value="50" min="5" max="500" step="5" />
+        </div>
         <button class="btn btn-primary" id="arcCreateBtn" onclick="createPolygonFromArcSelection()" disabled style="width:100%;">Create polygon from selection</button>
       </div>
     </div>
@@ -1323,10 +1327,13 @@
     function createPolygonFromArcSelection() {
       if (selectedArcFeatures.size === 0) return;
       const geojsonFeatures = [...selectedArcFeatures].map(l => l.toGeoJSON());
-
-      // Convex hull of all selected features → always one outer boundary polygon
       const collection = turf.featureCollection(geojsonFeatures);
-      const hull = turf.convex(collection);
+
+      // Concave hull — tightly wraps the outer edges of selected features.
+      // maxEdge controls tightness in km; falls back to convex hull if concave fails.
+      const maxEdgeM  = parseFloat(document.getElementById('arcMaxEdge').value) || 50;
+      const allPoints = turf.explode(collection);
+      const hull = turf.concave(allPoints, { maxEdge: maxEdgeM / 1000 }) || turf.convex(collection);
       if (!hull) { setStatus('Could not compute boundary — try selecting more features.', ''); return; }
 
       const lyr = L.geoJSON(hull, { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.12, weight: 2 }).getLayers()[0];
