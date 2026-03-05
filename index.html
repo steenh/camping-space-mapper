@@ -560,7 +560,7 @@
   <script src="https://unpkg.com/esri-leaflet@3/dist/esri-leaflet.js"></script>
   <script>
     // ── ArcGIS configuration ──────────────────────────────────────────────────
-    const ARCGIS_CLIENT_ID  = 'YOUR_APP_ID'; // replace with your ArcGIS app client ID
+    const ARCGIS_CLIENT_ID  = 'wDfGolINXTr1cgFD'; // replace with your ArcGIS app client ID
     const ARCGIS_PORTAL_URL = 'https://maps.roskilde-festival.dk/portal';
     const ARCGIS_LAYER_URL  = 'https://maps.roskilde-festival.dk/arcgis/rest/services/AllEditables_GODKENDT_V3_PRO/FeatureServer/835';
 
@@ -1184,7 +1184,7 @@
       sessionStorage.removeItem('arc_verifier');
       if (state !== savedState) { console.error('ArcGIS OAuth: state mismatch'); return false; }
       try {
-        const resp = await fetch(`${ARCGIS_PORTAL_URL}/sharing/rest/oauth2/token`, {
+        const resp = await fetch('/arc-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
