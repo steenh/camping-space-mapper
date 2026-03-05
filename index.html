@@ -247,6 +247,20 @@
       color: #94a3b8;
     }
     .mode-badge.straight { background: #065f46; color: #6ee7b7; }
+
+    .btn-select-active { background: #1e3a5f !important; color: #93c5fd !important; border: 1px solid #3b82f6; }
+
+    .area-entry {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid #1e293b;
+      gap: 8px;
+    }
+    .area-entry:last-child { border-bottom: none; }
+    .area-label { font-size: 0.78rem; color: #cbd5e1; }
+    .area-label small { color: #64748b; }
   </style>
 </head>
 <body>
@@ -270,6 +284,10 @@
       <div class="instruction-step">
         <div class="step-num">3</div>
         <div class="step-text">Click <strong>Calculate</strong> or <strong>Optimize</strong> to find the best layout</div>
+      </div>
+      <div class="instruction-step">
+        <div class="step-num">4</div>
+        <div class="step-text"><strong>Click</strong> a space to select it · <strong>Double-click</strong> to select its group · use <strong>Select area</strong> to box-select</div>
       </div>
     </div>
 
@@ -301,9 +319,15 @@
         <button class="btn btn-primary" id="calcBtn" onclick="calculate()" disabled>Calculate</button>
         <button class="btn btn-optimize" id="optBtn" onclick="optimize()" disabled>Optimize</button>
       </div>
-      <div class="btn-row">
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn btn-secondary" id="rectSelectBtn" onclick="toggleRectSelect()" disabled>Select area</button>
         <button class="btn btn-danger" onclick="clearAll()">Clear all</button>
       </div>
+    </div>
+
+    <div class="section" id="areasSection" style="display:none;">
+      <div class="section-title">Areas</div>
+      <div id="areasList"></div>
     </div>
 
     <div id="status-bar">
@@ -437,17 +461,32 @@
     const polyResults = new Map(); // polyIndex → { blocks, spaces }
     const selectedSpaces = new Set(); // selected space Layer references
 
+    let selectionRectMode = false;
+    let rectDrawHandler = null;
+
     function updateAreaDisplay() {
       const total = drawnPolygons.reduce((s, p) => s + turf.area(p.toGeoJSON()), 0);
       document.getElementById('totalArea').textContent = Math.round(total).toLocaleString('nl-NL');
     }
 
     map.on(L.Draw.Event.CREATED, e => {
+      // Rectangle select mode — don't add to drawn polygons
+      if (selectionRectMode) {
+        selectionRectMode = false;
+        rectDrawHandler = null;
+        document.getElementById('rectSelectBtn').classList.remove('btn-select-active');
+        map.getContainer().style.cursor = '';
+        selectSpacesInBounds(e.layer.getBounds());
+        return;
+      }
+
       drawnPolygons.push(e.layer);
       drawnItems.addLayer(e.layer);
       updateAreaDisplay();
+      updateAreasList();
       document.getElementById('calcBtn').disabled = false;
       document.getElementById('optBtn').disabled = false;
+      document.getElementById('rectSelectBtn').disabled = false;
       const n = drawnPolygons.length;
       setStatus(`${n} polygon${n > 1 ? 's' : ''} drawn. Click Calculate or Optimize.`, 'info');
       clearResults();
@@ -456,6 +495,7 @@
     map.on(L.Draw.Event.EDITED, () => {
       drawnPolygons = drawnItems.getLayers();
       updateAreaDisplay();
+      updateAreasList();
       resetSpatialState();
       updateSelectionDisplay();
       clearResults();
@@ -468,6 +508,7 @@
         clearAll();
       } else {
         updateAreaDisplay();
+        updateAreasList();
         resetSpatialState();
         updateSelectionDisplay();
         clearResults();
@@ -761,7 +802,10 @@
       const { blocks, rad, cLat, cLng, f } = result;
       const layers = [];
 
-      for (const { ox, oy, ncols, nrows } of blocks) {
+      for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
+        const { ox, oy, ncols, nrows } = blocks[blockIdx];
+        const blockKey = `${polyIndex}-${blockIdx}`;
+
         // Individual spaces
         for (let row = 0; row < nrows; row++) {
           for (let col = 0; col < ncols; col++) {
@@ -774,7 +818,18 @@
               weight: 1
             }).addTo(spacesLayer);
             spaceLayer._polyIndex = polyIndex;
-            spaceLayer.on('click', e => { L.DomEvent.stopPropagation(e); toggleSpace(spaceLayer); });
+            spaceLayer._blockKey  = blockKey;
+            // Single click with delay to distinguish from double-click
+            spaceLayer.on('click', e => {
+              L.DomEvent.stopPropagation(e);
+              clearTimeout(spaceLayer._clickTimer);
+              spaceLayer._clickTimer = setTimeout(() => toggleSpace(spaceLayer), 220);
+            });
+            spaceLayer.on('dblclick', e => {
+              L.DomEvent.stopPropagation(e);
+              clearTimeout(spaceLayer._clickTimer);
+              selectBlock(blockKey, polyIndex);
+            });
             layers.push(spaceLayer);
           }
         }
@@ -825,6 +880,80 @@
       el.textContent = count > 0 ? count.toLocaleString('nl-NL') : '—';
       el.className = 'stat-card-value' + (count > 0 ? '' : ' neutral');
       document.getElementById('selectionActions').style.display = count > 0 ? 'block' : 'none';
+    }
+
+    // Select all spaces in a block group (called on double-click)
+    function selectBlock(blockKey, polyIndex) {
+      const layers = polyLayers.get(polyIndex) || [];
+      for (const l of layers) {
+        if (l._blockKey === blockKey && !selectedSpaces.has(l)) {
+          selectedSpaces.add(l);
+          l.setStyle({ fillColor: '#93c5fd', color: '#3b82f6', fillOpacity: 0.9 });
+        }
+      }
+      updateSelectionDisplay();
+    }
+
+    // Select all spaces inside a drawn polygon
+    function selectAllInPolygon(polyIndex) {
+      const layers = polyLayers.get(polyIndex) || [];
+      for (const l of layers) {
+        if (l._polyIndex !== undefined && !selectedSpaces.has(l)) {
+          selectedSpaces.add(l);
+          l.setStyle({ fillColor: '#93c5fd', color: '#3b82f6', fillOpacity: 0.9 });
+        }
+      }
+      updateSelectionDisplay();
+    }
+
+    // Select all spaces whose centre falls within Leaflet LatLngBounds
+    function selectSpacesInBounds(bounds) {
+      for (const [, layers] of polyLayers) {
+        for (const l of layers) {
+          if (l._polyIndex === undefined) continue; // skip block outlines
+          if (bounds.contains(l.getBounds().getCenter()) && !selectedSpaces.has(l)) {
+            selectedSpaces.add(l);
+            l.setStyle({ fillColor: '#93c5fd', color: '#3b82f6', fillOpacity: 0.9 });
+          }
+        }
+      }
+      updateSelectionDisplay();
+    }
+
+    // Toggle rectangle-select mode
+    function toggleRectSelect() {
+      if (selectionRectMode) {
+        selectionRectMode = false;
+        if (rectDrawHandler) { rectDrawHandler.disable(); rectDrawHandler = null; }
+        document.getElementById('rectSelectBtn').classList.remove('btn-select-active');
+        map.getContainer().style.cursor = '';
+        return;
+      }
+      selectionRectMode = true;
+      document.getElementById('rectSelectBtn').classList.add('btn-select-active');
+      map.getContainer().style.cursor = 'crosshair';
+      rectDrawHandler = new L.Draw.Rectangle(map, {
+        shapeOptions: { color: '#3b82f6', weight: 2, fillOpacity: 0.1, fillColor: '#3b82f6', dashArray: '4 4' }
+      });
+      rectDrawHandler.enable();
+    }
+
+    // Rebuild the Areas sidebar list
+    function updateAreasList() {
+      const section = document.getElementById('areasSection');
+      const list = document.getElementById('areasList');
+      if (drawnPolygons.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+      section.style.display = 'block';
+      list.innerHTML = drawnPolygons.map((poly, i) => {
+        const area = Math.round(turf.area(poly.toGeoJSON())).toLocaleString('nl-NL');
+        return `<div class="area-entry">
+          <span class="area-label">Area ${i + 1} <small>(${area} m²)</small></span>
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.72rem;flex-shrink:0;" onclick="selectAllInPolygon(${i})">Select all</button>
+        </div>`;
+      }).join('');
     }
 
     // Returns a Set of polygon indices that have selected spaces, or null (= all)
@@ -951,14 +1080,22 @@
     }
 
     function clearAll() {
+      if (selectionRectMode) {
+        selectionRectMode = false;
+        if (rectDrawHandler) { rectDrawHandler.disable(); rectDrawHandler = null; }
+        document.getElementById('rectSelectBtn').classList.remove('btn-select-active');
+        map.getContainer().style.cursor = '';
+      }
       drawnItems.clearLayers();
       resetSpatialState();
       drawnPolygons = [];
       document.getElementById('calcBtn').disabled = true;
       document.getElementById('optBtn').disabled = true;
+      document.getElementById('rectSelectBtn').disabled = true;
       document.getElementById('totalArea').textContent = '—';
       clearResults();
       updateSelectionDisplay();
+      updateAreasList();
       setStatus('Draw a polygon to get started.', '');
     }
 
