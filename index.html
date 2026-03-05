@@ -384,6 +384,26 @@
       </div>
     </div>
 
+    <div class="section" id="arcSection">
+      <div class="section-title">ArcGIS Layers</div>
+      <div id="arcAuthArea">
+        <p style="font-size:0.75rem;color:#94a3b8;margin-bottom:10px;">Log in to load restricted feature layers from your ArcGIS Enterprise portal.</p>
+        <button class="btn btn-secondary" style="width:100%;" onclick="arcLogin()">Login to ArcGIS</button>
+      </div>
+      <div id="arcLayerArea" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:0.78rem;color:#cbd5e1;">AllEditables layer</span>
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f97316;flex-shrink:0;"></span>
+        </div>
+        <div class="btn-row" style="margin-bottom:8px;">
+          <button class="btn btn-secondary" id="arcRectBtn" onclick="toggleFeatureRectSelect()">Select features</button>
+          <button class="btn btn-secondary" id="arcClearBtn" onclick="clearArcSelection()" style="display:none;">Clear</button>
+        </div>
+        <div id="arcFeatureCount" style="font-size:0.73rem;color:#f97316;margin-bottom:8px;min-height:1em;"></div>
+        <button class="btn btn-primary" id="arcCreateBtn" onclick="createPolygonFromArcSelection()" disabled style="width:100%;">Create polygon from selection</button>
+      </div>
+    </div>
+
     <div class="section" id="productsSection">
       <div class="section-title">Product Types</div>
       <div id="productsList"></div>
@@ -472,6 +492,14 @@
     <div class="section">
       <div class="section-title">Legend</div>
       <div id="legendList"></div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:rgba(249,115,22,0.2); border: 1.5px solid #f97316;"></div>
+        ArcGIS feature
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:rgba(239,68,68,0.5); border: 2px solid #ef4444;"></div>
+        Selected ArcGIS feature
+      </div>
       <div class="legend-item" style="margin-top:6px;">
         <div class="legend-swatch" style="background:rgba(251,191,36,0.15); border: 2px solid #fbbf24;"></div>
         Drawn polygon
@@ -529,11 +557,20 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+  <script src="https://unpkg.com/esri-leaflet@3/dist/esri-leaflet.js"></script>
   <script>
+    // ── ArcGIS configuration ──────────────────────────────────────────────────
+    const ARCGIS_CLIENT_ID  = 'YOUR_APP_ID'; // replace with your ArcGIS app client ID
+    const ARCGIS_PORTAL_URL = 'https://maps.roskilde-festival.dk/portal';
+    const ARCGIS_LAYER_URL  = 'https://maps.roskilde-festival.dk/arcgis/rest/services/AllEditables_GODKENDT_V3_PRO/FeatureServer/835';
+
+    const ARC_DEFAULT_STYLE  = { color: '#f97316', fillColor: '#f97316', fillOpacity: 0.2, weight: 1.5 };
+    const ARC_SELECTED_STYLE = { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.5, weight: 2.5 };
+
     // ── Product types ─────────────────────────────────────────────────────────
     let nextProductId = 2;
     const products = [
-      { id: 1, name: 'Car + Tent', spaceW: 5, spaceH: 10, maxCols: 10, maxRows: 2, pathW: 5, color: '#4ade80' }
+      { id: 1, name: 'Get a Place', spaceW: 5, spaceH: 10, maxCols: 10, maxRows: 2, pathW: 5, color: '#4ade80' }
     ];
     const polygonProducts = new Map(); // polyIndex → productId
 
@@ -549,9 +586,10 @@
       return `rgb(${Math.round(r*factor)},${Math.round(g*factor)},${Math.round(b*factor)})`;
     }
 
-    // Initialise product list rendering on load
+    // Initialise on load
     document.addEventListener('DOMContentLoaded', () => {
       renderProductsList();
+      initArcGIS();
       document.getElementById('productModal').addEventListener('click', e => {
         if (e.target === document.getElementById('productModal')) closeProductModal();
       });
@@ -613,7 +651,16 @@
     }
 
     map.on(L.Draw.Event.CREATED, e => {
-      // Rectangle select mode — don't add to drawn polygons
+      // Feature rectangle select mode — select ArcGIS features
+      if (featureRectMode) {
+        featureRectMode = false;
+        featureRectHandler = null;
+        document.getElementById('arcRectBtn').classList.remove('btn-select-active');
+        map.getContainer().style.cursor = '';
+        selectArcFeaturesInBounds(e.layer.getBounds());
+        return;
+      }
+      // Camping space rectangle select mode — don't add to drawn polygons
       if (selectionRectMode) {
         selectionRectMode = false;
         rectDrawHandler = null;
@@ -1087,6 +1134,206 @@
         shapeOptions: { color: '#3b82f6', weight: 2, fillOpacity: 0.1, fillColor: '#3b82f6', dashArray: '4 4' }
       });
       rectDrawHandler.enable();
+    }
+
+    // ── ArcGIS OAuth (PKCE) ───────────────────────────────────────────────────
+    let arcToken       = null;
+    let arcTokenExpiry = 0;
+    let arcFeatureLayer = null;
+    const selectedArcFeatures = new Set();
+    let featureRectMode    = false;
+    let featureRectHandler = null;
+
+    function getRedirectUri() {
+      return window.location.origin + window.location.pathname;
+    }
+
+    function generateCodeVerifier() {
+      const arr = new Uint8Array(32);
+      crypto.getRandomValues(arr);
+      return btoa(String.fromCharCode(...arr)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+    }
+
+    async function generateCodeChallenge(verifier) {
+      const data   = new TextEncoder().encode(verifier);
+      const digest = await crypto.subtle.digest('SHA-256', data);
+      return btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+    }
+
+    async function arcLogin() {
+      const verifier = generateCodeVerifier();
+      const state    = generateCodeVerifier();
+      sessionStorage.setItem('arc_verifier', verifier);
+      sessionStorage.setItem('arc_state',    state);
+      const challenge = await generateCodeChallenge(verifier);
+      const params = new URLSearchParams({
+        client_id:             ARCGIS_CLIENT_ID,
+        response_type:         'code',
+        redirect_uri:          getRedirectUri(),
+        code_challenge:        challenge,
+        code_challenge_method: 'S256',
+        state
+      });
+      window.location.href = `${ARCGIS_PORTAL_URL}/sharing/rest/oauth2/authorize?${params}`;
+    }
+
+    async function exchangeCodeForToken(code, state) {
+      const savedState   = sessionStorage.getItem('arc_state');
+      const codeVerifier = sessionStorage.getItem('arc_verifier');
+      sessionStorage.removeItem('arc_state');
+      sessionStorage.removeItem('arc_verifier');
+      if (state !== savedState) { console.error('ArcGIS OAuth: state mismatch'); return false; }
+      try {
+        const resp = await fetch(`${ARCGIS_PORTAL_URL}/sharing/rest/oauth2/token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id:     ARCGIS_CLIENT_ID,
+            code,
+            grant_type:    'authorization_code',
+            redirect_uri:  getRedirectUri(),
+            code_verifier: codeVerifier,
+            f:             'json'
+          })
+        });
+        const data = await resp.json();
+        if (data.access_token) {
+          arcToken       = data.access_token;
+          arcTokenExpiry = Date.now() + (data.expires_in || 7200) * 1000 - 60000;
+          sessionStorage.setItem('arc_token',  arcToken);
+          sessionStorage.setItem('arc_expiry', String(arcTokenExpiry));
+          return true;
+        }
+        console.error('ArcGIS token error:', data);
+        return false;
+      } catch (err) {
+        console.error('ArcGIS token exchange failed:', err);
+        return false;
+      }
+    }
+
+    function initFeatureLayer() {
+      if (arcFeatureLayer) { arcFeatureLayer.remove(); arcFeatureLayer = null; }
+      arcFeatureLayer = L.esri.featureLayer({
+        url:   ARCGIS_LAYER_URL,
+        token: arcToken,
+        style: ARC_DEFAULT_STYLE
+      });
+      arcFeatureLayer.addTo(map);
+      arcFeatureLayer.on('load', updateArcUI);
+      arcFeatureLayer.on('click', e => {
+        L.DomEvent.stopPropagation(e);
+        const layer = e.layer;
+        if (selectedArcFeatures.has(layer)) {
+          selectedArcFeatures.delete(layer);
+          layer.setStyle(ARC_DEFAULT_STYLE);
+        } else {
+          selectedArcFeatures.add(layer);
+          layer.setStyle(ARC_SELECTED_STYLE);
+        }
+        updateArcUI();
+      });
+      updateArcUI();
+    }
+
+    function selectArcFeaturesInBounds(bounds) {
+      if (!arcFeatureLayer) return;
+      arcFeatureLayer.eachFeature(layer => {
+        try {
+          if (bounds.intersects(layer.getBounds()) && !selectedArcFeatures.has(layer)) {
+            selectedArcFeatures.add(layer);
+            layer.setStyle(ARC_SELECTED_STYLE);
+          }
+        } catch (_) {}
+      });
+      updateArcUI();
+    }
+
+    function clearArcSelection() {
+      for (const layer of selectedArcFeatures) layer.setStyle(ARC_DEFAULT_STYLE);
+      selectedArcFeatures.clear();
+      updateArcUI();
+    }
+
+    function toggleFeatureRectSelect() {
+      if (featureRectMode) {
+        featureRectMode = false;
+        if (featureRectHandler) { featureRectHandler.disable(); featureRectHandler = null; }
+        document.getElementById('arcRectBtn').classList.remove('btn-select-active');
+        map.getContainer().style.cursor = '';
+        return;
+      }
+      featureRectMode = true;
+      document.getElementById('arcRectBtn').classList.add('btn-select-active');
+      map.getContainer().style.cursor = 'crosshair';
+      featureRectHandler = new L.Draw.Rectangle(map, {
+        shapeOptions: { color: '#f97316', weight: 2, fillOpacity: 0.1, fillColor: '#f97316', dashArray: '4 4' }
+      });
+      featureRectHandler.enable();
+    }
+
+    function createPolygonFromArcSelection() {
+      if (selectedArcFeatures.size === 0) return;
+      const geojsonFeatures = [...selectedArcFeatures].map(l => l.toGeoJSON());
+      let union = geojsonFeatures[0];
+      for (let i = 1; i < geojsonFeatures.length; i++) {
+        try { union = turf.union(union, geojsonFeatures[i]); } catch (_) {}
+      }
+      const type = union.geometry.type;
+      const polysToAdd = type === 'MultiPolygon'
+        ? union.geometry.coordinates.map(rings => turf.polygon(rings))
+        : [union];
+      for (const poly of polysToAdd) {
+        const lyr = L.geoJSON(poly, { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.12, weight: 2 }).getLayers()[0];
+        drawnPolygons.push(lyr);
+        drawnItems.addLayer(lyr);
+      }
+      clearArcSelection();
+      updateAreaDisplay();
+      updateAreasList();
+      document.getElementById('calcBtn').disabled = false;
+      document.getElementById('optBtn').disabled  = false;
+      document.getElementById('rectSelectBtn').disabled = false;
+      const n = drawnPolygons.length;
+      setStatus(`${polysToAdd.length} polygon${polysToAdd.length !== 1 ? 's' : ''} created from ArcGIS selection. ${n} area${n !== 1 ? 's' : ''} total.`, 'info');
+    }
+
+    function updateArcUI() {
+      const count    = selectedArcFeatures.size;
+      const countEl  = document.getElementById('arcFeatureCount');
+      const createBtn = document.getElementById('arcCreateBtn');
+      const clearBtn  = document.getElementById('arcClearBtn');
+      if (countEl)    countEl.textContent   = count > 0 ? `${count} feature${count !== 1 ? 's' : ''} selected` : '';
+      if (createBtn)  createBtn.disabled    = count === 0;
+      if (clearBtn)   clearBtn.style.display = count > 0 ? '' : 'none';
+    }
+
+    async function initArcGIS() {
+      const params = new URLSearchParams(window.location.search);
+      const code   = params.get('code');
+      const state  = params.get('state');
+      if (code) {
+        history.replaceState({}, '', window.location.pathname);
+        const ok = await exchangeCodeForToken(code, state);
+        if (ok) { showArcLayerUI(); initFeatureLayer(); return; }
+      }
+      const storedToken  = sessionStorage.getItem('arc_token');
+      const storedExpiry = parseInt(sessionStorage.getItem('arc_expiry') || '0');
+      if (storedToken && Date.now() < storedExpiry) {
+        arcToken = storedToken; arcTokenExpiry = storedExpiry;
+        showArcLayerUI(); initFeatureLayer(); return;
+      }
+      showArcLoginUI();
+    }
+
+    function showArcLoginUI() {
+      document.getElementById('arcAuthArea').style.display  = 'block';
+      document.getElementById('arcLayerArea').style.display = 'none';
+    }
+
+    function showArcLayerUI() {
+      document.getElementById('arcAuthArea').style.display  = 'none';
+      document.getElementById('arcLayerArea').style.display = 'block';
     }
 
     // ── Product management ────────────────────────────────────────────────────
