@@ -503,12 +503,14 @@
       </div>
       <div id="arcSyncArea" style="display:none;">
         <div class="field" style="margin-bottom:8px;">
-          <label>ArcGIS feature layer URL</label>
-          <input type="text" id="arcLayerWriteUrl" placeholder="…/FeatureServer/0"
-            style="width:100%;padding:7px 10px;border-radius:5px;border:1px solid #475569;background:#0f172a;color:#f1f5f9;font-size:0.75rem;" />
+          <label>Target layer</label>
+          <select id="arcLayerWriteUrl" style="width:100%;padding:7px 10px;border-radius:5px;border:1px solid #475569;background:#0f172a;color:#f1f5f9;font-size:0.85rem;cursor:pointer;">
+            <option value="https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0">Camping West</option>
+          </select>
         </div>
         <button class="btn btn-primary" style="width:100%;" onclick="pushToArcGIS()">Push to ArcGIS (replace)</button>
-        <p style="font-size:0.7rem;color:#64748b;margin-top:6px;">Deletes all features in that layer, then writes current spaces with product_type attribute.</p>
+        <p style="font-size:0.7rem;color:#94a3b8;margin-top:6px;">Deletes all features in that layer, then writes current spaces with product_type attribute.</p>
+        <p style="font-size:0.7rem;color:#f87171;margin-top:4px;font-weight:600;">⚠ This is an advanced destructive feature — don't use unless you know what you're doing.</p>
       </div>
     </div>
 
