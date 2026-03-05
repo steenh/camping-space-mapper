@@ -199,6 +199,54 @@
       justify-content: space-between;
     }
     .specs-list li span { color: #e2e8f0; }
+
+    .toggle-field {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .toggle {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+    .toggle input { display: none; }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: #334155;
+      border-radius: 22px;
+      transition: background 0.2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 3px;
+      bottom: 3px;
+      background: #94a3b8;
+      border-radius: 50%;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: #065f46; }
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(18px);
+      background: #6ee7b7;
+    }
+    .mode-badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      padding: 2px 7px;
+      border-radius: 10px;
+      margin-left: 6px;
+      background: #334155;
+      color: #94a3b8;
+    }
+    .mode-badge.straight { background: #065f46; color: #6ee7b7; }
   </style>
 </head>
 <body>
@@ -238,6 +286,13 @@
       <div class="field">
         <label>Grid offset Y (m) — shift rows (0–24)</label>
         <input type="number" id="offsetY" value="0" min="0" max="24" step="1" />
+      </div>
+      <div class="field toggle-field" style="margin-top:12px; padding-top:12px; border-top:1px solid #334155;">
+        <label style="margin:0;">Straight walking paths <span id="modeBadge" class="mode-badge">off</span></label>
+        <label class="toggle">
+          <input type="checkbox" id="straightPaths" onchange="onToggleStraight()" />
+          <span class="toggle-slider"></span>
+        </label>
       </div>
     </div>
 
@@ -545,6 +600,91 @@
       return { blocks, rad, cLat, cLng, f };
     }
 
+    // ── Straight-paths placement ──────────────────────────────────────────────
+    // Uses a fixed column grid so every row uses the same block width per column,
+    // creating continuous vertical corridors that guests can walk straight through.
+    //
+    // For each column slot the algorithm picks the block width W (1–10) that
+    // maximises total spaces across all rows: W × (number of rows where W fits).
+    function runPlacementStraight(polygon, angleDeg, offX, offY) {
+      const geo = polygon.toGeoJSON();
+      const cent = turf.centroid(geo).geometry.coordinates;
+      const cLng = cent[0], cLat = cent[1];
+      const f = getFactors(cLat);
+
+      const rawCoords = geo.geometry.coordinates[0];
+      const polyLocal = rawCoords.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
+
+      const xs = polyLocal.map(c => c.x), ys = polyLocal.map(c => c.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const polyW = maxX - minX, polyH = maxY - minY;
+
+      const rad = angleDeg * Math.PI / 180;
+      const cos = Math.cos(rad), sin = Math.sin(rad);
+      const ux = { x: cos,  y: sin };
+      const uy = { x: -sin, y: cos };
+
+      const diag = Math.sqrt(polyW * polyW + polyH * polyH) + 100;
+      const nRows = Math.ceil(diag / STEP_Y) + 4;
+      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+
+      // Pre-compute base point for each row band
+      const rowBases = [];
+      for (let rowIdx = 0; rowIdx < nRows; rowIdx++) {
+        const d = -diag / 2 + rowIdx * STEP_Y + offY;
+        rowBases.push({ x: cx + d * uy.x, y: cy + d * uy.y });
+      }
+
+      // Fixed column slot positions
+      const colSlots = [];
+      for (let xd = -diag / 2 + offX; xd < diag / 2; xd += STEP_X) {
+        colSlots.push(xd);
+      }
+
+      const blocks = [];
+
+      for (const xDist of colSlots) {
+        // For each row find the max ncols that fits at this slot (0 = nothing fits)
+        const capacity = rowBases.map(base => {
+          const ox = base.x + xDist * ux.x;
+          const oy = base.y + xDist * ux.y;
+          for (let n = COLS; n >= 1; n--) {
+            if (isBlockInside(blockCorners(ox, oy, n * SPACE_W, rad), polyLocal)) return n;
+          }
+          return 0;
+        });
+
+        // Pick the width W that maximises W × (rows where capacity >= W)
+        let bestN = 0, bestScore = 0;
+        for (let n = COLS; n >= 1; n--) {
+          const score = n * capacity.filter(c => c >= n).length;
+          if (score > bestScore) { bestScore = score; bestN = n; }
+        }
+        if (bestN === 0) continue;
+
+        // Place uniform-width blocks in every eligible row
+        for (let rowIdx = 0; rowIdx < nRows; rowIdx++) {
+          if (capacity[rowIdx] >= bestN) {
+            blocks.push({
+              ox: rowBases[rowIdx].x + xDist * ux.x,
+              oy: rowBases[rowIdx].y + xDist * ux.y,
+              ncols: bestN
+            });
+          }
+        }
+      }
+
+      return { blocks, rad, cLat, cLng, f };
+    }
+
+    function onToggleStraight() {
+      const on = document.getElementById('straightPaths').checked;
+      const badge = document.getElementById('modeBadge');
+      badge.textContent = on ? 'on' : 'off';
+      badge.className = 'mode-badge' + (on ? ' straight' : '');
+    }
+
     // ── Render helpers ────────────────────────────────────────────────────────
     function totalSpacesOf(blocks) {
       return blocks.reduce((s, b) => s + b.ncols * ROWS, 0);
@@ -589,9 +729,13 @@
       const offX     = parseFloat(document.getElementById('offsetX').value)  || 0;
       const offY     = parseFloat(document.getElementById('offsetY').value)  || 0;
 
+      const straight = document.getElementById('straightPaths').checked;
+
       // Small timeout so the status bar renders before heavy computation
       setTimeout(() => {
-        const result = runPlacement(drawnPolygon, angleDeg, offX, offY);
+        const result = straight
+          ? runPlacementStraight(drawnPolygon, angleDeg, offX, offY)
+          : runPlacement(drawnPolygon, angleDeg, offX, offY);
         renderBlocks(result);
 
         const count = result.blocks.length;
@@ -602,9 +746,10 @@
         document.getElementById('optimal-badge').style.display = 'none';
 
         if (!silent) {
+          const modeLabel = straight ? ' (straight paths)' : '';
           setStatus(
             spaces > 0
-              ? `${count} group${count !== 1 ? 's' : ''} placed → ${spaces} camping spaces.`
+              ? `${count} group${count !== 1 ? 's' : ''} placed → ${spaces} camping spaces${modeLabel}.`
               : 'Nothing fits yet. Try a larger area or different rotation.',
             spaces > 0 ? 'ok' : ''
           );
@@ -616,18 +761,19 @@
       if (!drawnPolygon) return;
       setStatus('Optimizing rotation & offset…', 'busy');
 
+      const straight = document.getElementById('straightPaths').checked;
+      const placer = straight ? runPlacementStraight : runPlacement;
+
       setTimeout(() => {
         let best = { spaces: -1, angleDeg: 0, offX: 0, offY: 0 };
 
-        // Try all angles 0–89° with a coarse Y-offset grid.
-        // X offset has less impact with the greedy sweep, but we sample a few values.
         const offsetStepsX = [0, 11, 22, 33, 44];
         const offsetStepsY = [0, 5, 10, 15, 20];
 
         for (let a = 0; a < 90; a++) {
           for (const ox of offsetStepsX) {
             for (const oy of offsetStepsY) {
-              const result = runPlacement(drawnPolygon, a, ox, oy);
+              const result = placer(drawnPolygon, a, ox, oy);
               const spaces = totalSpacesOf(result.blocks);
               if (spaces > best.spaces) {
                 best = { spaces, angleDeg: a, offX: ox, offY: oy };
@@ -641,7 +787,7 @@
         document.getElementById('offsetX').value  = best.offX;
         document.getElementById('offsetY').value  = best.offY;
 
-        const result = runPlacement(drawnPolygon, best.angleDeg, best.offX, best.offY);
+        const result = placer(drawnPolygon, best.angleDeg, best.offX, best.offY);
         renderBlocks(result);
 
         const count = result.blocks.length;
@@ -651,9 +797,10 @@
         document.getElementById('bestRot').textContent = best.angleDeg + '°';
         document.getElementById('optimal-badge').style.display = 'inline';
 
+        const modeLabel = straight ? ' · straight paths' : '';
         setStatus(
           spaces > 0
-            ? `Optimal: ${count} groups (${spaces} spaces) at ${best.angleDeg}°.`
+            ? `Optimal: ${count} groups (${spaces} spaces) at ${best.angleDeg}°${modeLabel}.`
             : 'Nothing fits. Try a larger polygon.',
           spaces > 0 ? 'ok' : ''
         );
