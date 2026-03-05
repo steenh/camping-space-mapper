@@ -496,6 +496,22 @@
       <p style="font-size:0.73rem; color:#64748b; margin-top:8px;">Calculate / Optimize will only re-run the selected areas.</p>
     </div>
 
+    <div class="section" id="exportSection" style="display:none;">
+      <div class="section-title">Export / Sync</div>
+      <div class="btn-row" style="margin-bottom:10px;">
+        <button class="btn btn-secondary" onclick="exportGeoJSON()">Download GeoJSON</button>
+      </div>
+      <div id="arcSyncArea" style="display:none;">
+        <div class="field" style="margin-bottom:8px;">
+          <label>ArcGIS feature layer URL</label>
+          <input type="text" id="arcLayerWriteUrl" placeholder="…/FeatureServer/0"
+            style="width:100%;padding:7px 10px;border-radius:5px;border:1px solid #475569;background:#0f172a;color:#f1f5f9;font-size:0.75rem;" />
+        </div>
+        <button class="btn btn-primary" style="width:100%;" onclick="pushToArcGIS()">Push to ArcGIS (replace)</button>
+        <p style="font-size:0.7rem;color:#64748b;margin-top:6px;">Deletes all features in that layer, then writes current spaces with product_type attribute.</p>
+      </div>
+    </div>
+
     <div class="section">
       <div class="section-title">Legend</div>
       <div id="legendList"></div>
@@ -996,6 +1012,7 @@
     function renderAllBlocks(results) {
       resetSpatialState();
       results.forEach((result, i) => renderBlocks(result, i, getProductForPoly(i)));
+      updateExportSection();
     }
 
     function clearPolyLayers(polyIndex) {
@@ -1386,6 +1403,7 @@
     function showArcLayerUI() {
       document.getElementById('arcAuthArea').style.display  = 'none';
       document.getElementById('arcLayerArea').style.display = 'block';
+      updateExportSection();
     }
 
     // ── Product management ────────────────────────────────────────────────────
@@ -1543,6 +1561,7 @@
             renderBlocks(placer(drawnPolygons[i], angleDeg, offX, offY, product), i, product);
             selectAllInPolygon(i);
           }
+          updateExportSection();
         } else {
           const results = drawnPolygons.map((poly, i) => placer(poly, angleDeg, offX, offY, getProductForPoly(i)));
           renderAllBlocks(results);
@@ -1609,6 +1628,7 @@
             renderBlocks(placer(drawnPolygons[i], best.angleDeg, best.offX, best.offY, product), i, product);
             selectAllInPolygon(i);
           }
+          updateExportSection();
         } else {
           renderAllBlocks(drawnPolygons.map((poly, i) => placer(poly, best.angleDeg, best.offX, best.offY, getProductForPoly(i))));
         }
@@ -1628,6 +1648,94 @@
           spaces > 0 ? 'ok' : ''
         );
       }, 30);
+    }
+
+    // ── Export / Sync ─────────────────────────────────────────────────────────
+    function updateExportSection() {
+      const hasResults = polyResults.size > 0;
+      document.getElementById('exportSection').style.display = hasResults ? 'block' : 'none';
+      document.getElementById('arcSyncArea').style.display   = (hasResults && arcToken) ? 'block' : 'none';
+    }
+
+    function exportGeoJSON() {
+      const features = [];
+      for (const [polyIndex, layers] of polyLayers) {
+        const product = getProductForPoly(polyIndex);
+        for (const layer of layers) {
+          if (layer._polyIndex === undefined) continue; // skip block outlines
+          const f = layer.toGeoJSON();
+          f.properties = {
+            product_type: product.name,
+            area_index:   polyIndex + 1,
+            block_key:    layer._blockKey
+          };
+          features.push(f);
+        }
+      }
+      const collection = { type: 'FeatureCollection', features };
+      const blob = new Blob([JSON.stringify(collection, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'camping-layout.geojson';
+      a.click();
+    }
+
+    async function pushToArcGIS() {
+      const layerUrl = document.getElementById('arcLayerWriteUrl').value.trim();
+      if (!layerUrl) { setStatus('Enter the ArcGIS feature layer URL first.', ''); return; }
+      if (!arcToken)  { setStatus('Not authenticated with ArcGIS.', ''); return; }
+
+      setStatus('Pushing to ArcGIS…', 'busy');
+
+      const proxyPost = async (endpoint, body) => {
+        const resp = await fetch(`/arc-proxy?target=${encodeURIComponent(endpoint)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ ...body, token: arcToken, f: 'json' })
+        });
+        return resp.json();
+      };
+
+      try {
+        // 1. Delete all existing features
+        const delResult = await proxyPost(`${layerUrl}/deleteFeatures`, { where: '1=1' });
+        if (delResult.error) throw new Error(delResult.error.message);
+
+        // 2. Build feature array
+        const arcFeatures = [];
+        for (const [polyIndex, layers] of polyLayers) {
+          const product = getProductForPoly(polyIndex);
+          for (const layer of layers) {
+            if (layer._polyIndex === undefined) continue; // skip block outlines
+            const latlngs = layer.getLatLngs()[0];
+            const ring = latlngs.map(ll => [ll.lng, ll.lat]);
+            ring.push(ring[0]); // close ring
+            arcFeatures.push({
+              geometry: { rings: [ring], spatialReference: { wkid: 4326 } },
+              attributes: {
+                product_type: product.name,
+                area_index:   polyIndex + 1,
+                block_key:    layer._blockKey
+              }
+            });
+          }
+        }
+
+        // 3. Add features (ArcGIS has a 2000-feature limit per request — chunk if needed)
+        const CHUNK = 500;
+        for (let i = 0; i < arcFeatures.length; i += CHUNK) {
+          const chunk = arcFeatures.slice(i, i + CHUNK);
+          const addResult = await proxyPost(`${layerUrl}/addFeatures`, {
+            features: JSON.stringify(chunk)
+          });
+          if (addResult.error) throw new Error(addResult.error.message);
+        }
+
+        setStatus(`${arcFeatures.length} spaces pushed to ArcGIS.`, 'ok');
+      } catch (err) {
+        console.error('ArcGIS push failed:', err);
+        setStatus(`ArcGIS push failed: ${err.message}`, '');
+      }
     }
 
     function clearAll() {
@@ -1658,6 +1766,7 @@
       document.getElementById('optimal-badge').style.display = 'none';
       document.getElementById('totalSpaces').className = 'stat-card-value neutral';
       document.getElementById('totalBlocks').className = 'stat-card-value neutral';
+      updateExportSection();
     }
 
     // Clear selection when clicking empty map area
