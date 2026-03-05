@@ -598,11 +598,13 @@
     }
 
     // ── Straight-paths placement ──────────────────────────────────────────────
-    // Uses a fixed column grid so every row uses the same block width per column,
-    // creating continuous vertical corridors that guests can walk straight through.
+    // Every row uses the same block width per column slot, so the path between
+    // columns is a straight vertical corridor at a fixed X position.
     //
-    // For each column slot the algorithm picks the block width W (1–10) that
-    // maximises total spaces across all rows: W × (number of rows where W fits).
+    // KEY IMPROVEMENT over a fixed 55-m grid: column slots are ADAPTIVE.
+    // After choosing bestN for a slot the next slot starts bestN×5 + 5 m later
+    // (actual block width + path), not the maximum possible 55 m. This packs
+    // narrower columns tighter and naturally adapts to irregular polygon shapes.
     function runPlacementStraight(polygon, angleDeg, offX, offY) {
       const geo = polygon.toGeoJSON();
       const cent = turf.centroid(geo).geometry.coordinates;
@@ -633,20 +635,20 @@
         rowBases.push({ x: cx + d * uy.x, y: cy + d * uy.y });
       }
 
-      // Fixed column slot positions
-      const colSlots = [];
-      for (let xd = -diag / 2 + offX; xd < diag / 2; xd += STEP_X) {
-        colSlots.push(xd);
-      }
+      // ── Phase 1: build adaptive column slots ─────────────────────────────
+      // Sweep left→right. At each candidate position find bestN (uniform width
+      // that maximises spaces across all rows), then advance by bestN×5+5 m.
+      // When nothing fits, step forward 5 m and try again.
+      const colData = []; // { xDist, bestN, capacity[] }
+      let xd = -diag / 2 + offX;
+      const maxSteps = Math.ceil(diag / SPACE_W) + 20; // safety cap
+      let steps = 0;
 
-      const blocks = [];
-
-      for (const xDist of colSlots) {
-        // For each row find the best (ncols, nrows) that fits at this slot.
-        // 2-row is tried first; 1-row is the fallback.
+      while (xd < diag / 2 && steps++ < maxSteps) {
+        // Per-row capacity at this column position
         const capacity = rowBases.map(base => {
-          const ox = base.x + xDist * ux.x;
-          const oy = base.y + xDist * ux.y;
+          const ox = base.x + xd * ux.x;
+          const oy = base.y + xd * ux.y;
           for (let n = COLS; n >= 1; n--) {
             if (isBlockInside(blockCorners(ox, oy, n * SPACE_W, BLOCK_H, rad), polyLocal))
               return { ncols: n, nrows: 2 };
@@ -658,8 +660,7 @@
           return null;
         });
 
-        // Pick the uniform column width W that maximises total spaces across all rows.
-        // Score = sum of nrows for every row where capacity.ncols >= W, multiplied by W.
+        // Pick the uniform width that maximises total spaces (ncols × nrows summed)
         let bestN = 0, bestScore = 0;
         for (let n = COLS; n >= 1; n--) {
           let score = 0;
@@ -668,9 +669,18 @@
           }
           if (score > bestScore) { bestScore = score; bestN = n; }
         }
-        if (bestN === 0) continue;
 
-        // Place uniform-width blocks — each row independently chooses nrows
+        if (bestN > 0) {
+          colData.push({ xDist: xd, bestN, capacity });
+          xd += bestN * SPACE_W + PATH_W; // advance by actual width + path
+        } else {
+          xd += SPACE_W; // nothing fits here; try 5 m further
+        }
+      }
+
+      // ── Phase 2: place blocks ─────────────────────────────────────────────
+      const blocks = [];
+      for (const { xDist, bestN, capacity } of colData) {
         for (let rowIdx = 0; rowIdx < nRows; rowIdx++) {
           const cap = capacity[rowIdx];
           if (cap && cap.ncols >= bestN) {
