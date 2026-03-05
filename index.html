@@ -252,15 +252,108 @@
 
     .area-entry {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 5px 0;
+      flex-direction: column;
+      padding: 8px 0;
       border-bottom: 1px solid #1e293b;
-      gap: 8px;
+      gap: 6px;
     }
     .area-entry:last-child { border-bottom: none; }
+    .area-entry-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
     .area-label { font-size: 0.78rem; color: #cbd5e1; }
     .area-label small { color: #64748b; }
+    .area-entry select {
+      width: 100%;
+      padding: 5px 8px;
+      border-radius: 5px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #f1f5f9;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+    .area-entry select:focus { outline: none; border-color: #3b82f6; }
+
+    .product-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid #1e293b;
+    }
+    .product-item:last-child { border-bottom: none; }
+    .product-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .product-name { font-size: 0.78rem; color: #cbd5e1; flex: 1; }
+    .product-specs { font-size: 0.68rem; color: #64748b; }
+    .btn-xs {
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.68rem;
+      font-weight: 600;
+    }
+    .btn-xs-secondary { background: #334155; color: #cbd5e1; }
+    .btn-xs-secondary:hover { background: #475569; }
+    .btn-xs-danger { background: #7f1d1d; color: #fca5a5; }
+    .btn-xs-danger:hover { background: #991b1b; }
+
+    /* Modal overlay */
+    #productModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+    #productModal.open { display: flex; }
+    .modal-box {
+      background: #1e293b;
+      border-radius: 10px;
+      padding: 22px 24px;
+      width: 290px;
+      border: 1px solid #334155;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .modal-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: 16px;
+    }
+    .modal-field { margin-bottom: 10px; }
+    .modal-field label {
+      display: block;
+      font-size: 0.73rem;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+    .modal-field input[type=text],
+    .modal-field input[type=number],
+    .modal-field input[type=color] {
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 5px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #f1f5f9;
+      font-size: 0.85rem;
+    }
+    .modal-field input[type=color] {
+      padding: 3px 6px;
+      height: 34px;
+      cursor: pointer;
+    }
+    .modal-field input:focus { outline: none; border-color: #3b82f6; }
+    .modal-field-row { display: flex; gap: 8px; }
+    .modal-field-row .modal-field { flex: 1; }
   </style>
 </head>
 <body>
@@ -289,6 +382,12 @@
         <div class="step-num">4</div>
         <div class="step-text"><strong>Click</strong> a space to select it · <strong>Double-click</strong> to select its group · use <strong>Select area</strong> to box-select</div>
       </div>
+    </div>
+
+    <div class="section" id="productsSection">
+      <div class="section-title">Product Types</div>
+      <div id="productsList"></div>
+      <button class="btn btn-secondary" style="width:100%;margin-top:10px;font-size:0.78rem;" onclick="openProductModal()">+ Add product type</button>
     </div>
 
     <div class="section">
@@ -371,30 +470,58 @@
     </div>
 
     <div class="section">
-      <div class="section-title">Specifications</div>
-      <ul class="specs-list">
-        <li>Space size <span>5 × 10 m</span></li>
-        <li>Block formation <span>1–10 cols × 2 rows</span></li>
-        <li>Max block size <span>50 × 20 m</span></li>
-        <li>Max per block <span>20 spaces</span></li>
-        <li>Path width <span>5 m</span></li>
-        <li>Row height step <span>25 m</span></li>
-      </ul>
-    </div>
-
-    <div class="section">
       <div class="section-title">Legend</div>
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:#4ade80; border: 1px solid #16a34a;"></div>
-        Camping space (5×10 m)
-      </div>
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:none; border: 2px dashed #fbbf24;"></div>
-        Group outline (1–10 cols × 2 rows)
-      </div>
-      <div class="legend-item">
+      <div id="legendList"></div>
+      <div class="legend-item" style="margin-top:6px;">
         <div class="legend-swatch" style="background:rgba(251,191,36,0.15); border: 2px solid #fbbf24;"></div>
         Drawn polygon
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#93c5fd; border: 1px solid #3b82f6;"></div>
+        Selected space
+      </div>
+    </div>
+  </div>
+
+  <!-- Product type modal -->
+  <div id="productModal">
+    <div class="modal-box">
+      <div class="modal-title" id="modalTitle">Add Product Type</div>
+      <div class="modal-field">
+        <label>Name</label>
+        <input type="text" id="pName" placeholder="e.g. Car + Tent" />
+      </div>
+      <div class="modal-field-row">
+        <div class="modal-field">
+          <label>Space width (m)</label>
+          <input type="number" id="pSpaceW" value="5" min="1" max="50" step="0.5" />
+        </div>
+        <div class="modal-field">
+          <label>Space height (m)</label>
+          <input type="number" id="pSpaceH" value="10" min="1" max="50" step="0.5" />
+        </div>
+      </div>
+      <div class="modal-field-row">
+        <div class="modal-field">
+          <label>Max cols</label>
+          <input type="number" id="pMaxCols" value="10" min="1" max="20" step="1" />
+        </div>
+        <div class="modal-field">
+          <label>Max rows</label>
+          <input type="number" id="pMaxRows" value="2" min="1" max="10" step="1" />
+        </div>
+      </div>
+      <div class="modal-field">
+        <label>Path width (m)</label>
+        <input type="number" id="pPathW" value="5" min="1" max="20" step="0.5" />
+      </div>
+      <div class="modal-field">
+        <label>Color</label>
+        <input type="color" id="pColor" value="#4ade80" />
+      </div>
+      <div class="btn-row" style="margin-top:16px;">
+        <button class="btn btn-primary" onclick="saveProduct()">Save</button>
+        <button class="btn btn-secondary" onclick="closeProductModal()">Cancel</button>
       </div>
     </div>
   </div>
@@ -403,16 +530,32 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
   <script>
-    // ── Constants ─────────────────────────────────────────────────────────────
-    const SPACE_W  = 5;   // m, width of one camping space
-    const SPACE_H  = 10;  // m, height of one camping space
-    const COLS     = 10;  // spaces per row in a block
-    const ROWS     = 2;   // rows per block
-    const BLOCK_W  = COLS * SPACE_W;  // 50 m
-    const BLOCK_H  = ROWS * SPACE_H;  // 20 m
-    const PATH_W   = 5;   // m, path between blocks
-    const STEP_X   = BLOCK_W + PATH_W; // 55 m
-    const STEP_Y   = BLOCK_H + PATH_W; // 25 m
+    // ── Product types ─────────────────────────────────────────────────────────
+    let nextProductId = 2;
+    const products = [
+      { id: 1, name: 'Car + Tent', spaceW: 5, spaceH: 10, maxCols: 10, maxRows: 2, pathW: 5, color: '#4ade80' }
+    ];
+    const polygonProducts = new Map(); // polyIndex → productId
+
+    function getProductForPoly(polyIndex) {
+      const pid = polygonProducts.get(polyIndex);
+      return (pid && products.find(p => p.id === pid)) || products[0];
+    }
+
+    function darkenHex(hex, factor = 0.55) {
+      const r = parseInt(hex.slice(1,3), 16);
+      const g = parseInt(hex.slice(3,5), 16);
+      const b = parseInt(hex.slice(5,7), 16);
+      return `rgb(${Math.round(r*factor)},${Math.round(g*factor)},${Math.round(b*factor)})`;
+    }
+
+    // Initialise product list rendering on load
+    document.addEventListener('DOMContentLoaded', () => {
+      renderProductsList();
+      document.getElementById('productModal').addEventListener('click', e => {
+        if (e.target === document.getElementById('productModal')) closeProductModal();
+      });
+    });
 
     // ── Map setup ─────────────────────────────────────────────────────────────
     const map = L.map('map', { zoomControl: true }).setView([55.6270, 12.0760], 16);
@@ -507,6 +650,7 @@
       if (drawnPolygons.length === 0) {
         clearAll();
       } else {
+        polygonProducts.clear(); // indices shift after deletion; user re-assigns
         updateAreaDisplay();
         updateAreasList();
         resetSpatialState();
@@ -545,14 +689,14 @@
       ];
     }
 
-    function spaceCorners(ox, oy, col, row, rad) {
+    function spaceCorners(ox, oy, col, row, rad, sw, sh) {
       const cos = Math.cos(rad), sin = Math.sin(rad);
-      const lx = col * SPACE_W, ly = row * SPACE_H;
+      const lx = col * sw, ly = row * sh;
       return [
-        { x: ox + lx * cos - ly * sin,                     y: oy + lx * sin + ly * cos },
-        { x: ox + (lx + SPACE_W) * cos - ly * sin,          y: oy + (lx + SPACE_W) * sin + ly * cos },
-        { x: ox + (lx + SPACE_W) * cos - (ly + SPACE_H) * sin, y: oy + (lx + SPACE_W) * sin + (ly + SPACE_H) * cos },
-        { x: ox + lx * cos - (ly + SPACE_H) * sin,          y: oy + lx * sin + (ly + SPACE_H) * cos }
+        { x: ox + lx * cos - ly * sin,              y: oy + lx * sin + ly * cos },
+        { x: ox + (lx + sw) * cos - ly * sin,        y: oy + (lx + sw) * sin + ly * cos },
+        { x: ox + (lx + sw) * cos - (ly + sh) * sin, y: oy + (lx + sw) * sin + (ly + sh) * cos },
+        { x: ox + lx * cos - (ly + sh) * sin,        y: oy + lx * sin + (ly + sh) * cos }
       ];
     }
 
@@ -601,7 +745,8 @@
     // then (nrows=1, ncols=10→1) so 2-row groups are always preferred but
     // 1-row groups fill spots where 2-row ones don't fit.
     // The Y step after each row equals the tallest block placed + 5 m path.
-    function runPlacement(polygon, angleDeg, offX, offY) {
+    function runPlacement(polygon, angleDeg, offX, offY, product) {
+      const { spaceW, spaceH, maxCols, maxRows, pathW } = product;
       const geo = polygon.toGeoJSON();
       const cent = turf.centroid(geo).geometry.coordinates;
       const cLng = cent[0], cLat = cent[1];
@@ -638,13 +783,12 @@
           const oy = rowBY + xDist * ux.y;
 
           let placed = false;
-          // Try 2-row blocks (ncols 10→1), then 1-row blocks (ncols 10→1)
-          outer: for (let nrows = ROWS; nrows >= 1; nrows--) {
-            const h = nrows * SPACE_H;
-            for (let ncols = COLS; ncols >= 1; ncols--) {
-              if (isBlockInside(blockCorners(ox, oy, ncols * SPACE_W, h, rad), polyLocal)) {
+          outer: for (let nrows = maxRows; nrows >= 1; nrows--) {
+            const h = nrows * spaceH;
+            for (let ncols = maxCols; ncols >= 1; ncols--) {
+              if (isBlockInside(blockCorners(ox, oy, ncols * spaceW, h, rad), polyLocal)) {
                 blocks.push({ ox, oy, ncols, nrows });
-                xDist += ncols * SPACE_W + PATH_W;
+                xDist += ncols * spaceW + pathW;
                 if (h > rowMaxH) rowMaxH = h;
                 placed = true;
                 break outer;
@@ -652,12 +796,10 @@
             }
           }
 
-          if (!placed) xDist += SPACE_W;
+          if (!placed) xDist += spaceW;
         }
 
-        // Advance Y by tallest block in this row + path; if row was empty move by
-        // the minimum block height so we don't loop forever on a tiny polygon
-        rowDist += rowMaxH > 0 ? rowMaxH + PATH_W : SPACE_H;
+        rowDist += rowMaxH > 0 ? rowMaxH + pathW : spaceH;
       }
 
       return { blocks, rad, cLat, cLng, f };
@@ -671,7 +813,10 @@
     // After choosing bestN for a slot the next slot starts bestN×5 + 5 m later
     // (actual block width + path), not the maximum possible 55 m. This packs
     // narrower columns tighter and naturally adapts to irregular polygon shapes.
-    function runPlacementStraight(polygon, angleDeg, offX, offY) {
+    function runPlacementStraight(polygon, angleDeg, offX, offY, product) {
+      const { spaceW, spaceH, maxCols, maxRows, pathW } = product;
+      const blockH = maxRows * spaceH;
+      const stepY  = blockH + pathW;
       const geo = polygon.toGeoJSON();
       const cent = turf.centroid(geo).geometry.coordinates;
       const cLng = cent[0], cLat = cent[1];
@@ -691,44 +836,38 @@
       const uy = { x: -sin, y: cos };
 
       const diag = Math.sqrt(polyW * polyW + polyH * polyH) + 100;
-      const nRows = Math.ceil(diag / STEP_Y) + 4;
+      const nRows = Math.ceil(diag / stepY) + 4;
       const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
 
-      // Pre-compute base point for each row band
       const rowBases = [];
       for (let rowIdx = 0; rowIdx < nRows; rowIdx++) {
-        const d = -diag / 2 + rowIdx * STEP_Y + offY;
+        const d = -diag / 2 + rowIdx * stepY + offY;
         rowBases.push({ x: cx + d * uy.x, y: cy + d * uy.y });
       }
 
       // ── Phase 1: build adaptive column slots ─────────────────────────────
-      // Sweep left→right. At each candidate position find bestN (uniform width
-      // that maximises spaces across all rows), then advance by bestN×5+5 m.
-      // When nothing fits, step forward 5 m and try again.
-      const colData = []; // { xDist, bestN, capacity[] }
+      const colData = [];
       let xd = -diag / 2 + offX;
-      const maxSteps = Math.ceil(diag / SPACE_W) + 20; // safety cap
+      const maxSteps = Math.ceil(diag / spaceW) + 20;
       let steps = 0;
 
       while (xd < diag / 2 && steps++ < maxSteps) {
-        // Per-row capacity at this column position
         const capacity = rowBases.map(base => {
           const ox = base.x + xd * ux.x;
           const oy = base.y + xd * ux.y;
-          for (let n = COLS; n >= 1; n--) {
-            if (isBlockInside(blockCorners(ox, oy, n * SPACE_W, BLOCK_H, rad), polyLocal))
-              return { ncols: n, nrows: 2 };
+          for (let n = maxCols; n >= 1; n--) {
+            if (isBlockInside(blockCorners(ox, oy, n * spaceW, blockH, rad), polyLocal))
+              return { ncols: n, nrows: maxRows };
           }
-          for (let n = COLS; n >= 1; n--) {
-            if (isBlockInside(blockCorners(ox, oy, n * SPACE_W, SPACE_H, rad), polyLocal))
+          for (let n = maxCols; n >= 1; n--) {
+            if (isBlockInside(blockCorners(ox, oy, n * spaceW, spaceH, rad), polyLocal))
               return { ncols: n, nrows: 1 };
           }
           return null;
         });
 
-        // Pick the uniform width that maximises total spaces (ncols × nrows summed)
         let bestN = 0, bestScore = 0;
-        for (let n = COLS; n >= 1; n--) {
+        for (let n = maxCols; n >= 1; n--) {
           let score = 0;
           for (const cap of capacity) {
             if (cap && cap.ncols >= n) score += cap.nrows * n;
@@ -738,39 +877,34 @@
 
         if (bestN > 0) {
           colData.push({ xDist: xd, bestN, capacity });
-          xd += bestN * SPACE_W + PATH_W; // advance by actual width + path
+          xd += bestN * spaceW + pathW;
         } else {
-          xd += SPACE_W; // nothing fits here; try 5 m further
+          xd += spaceW;
         }
       }
 
       // ── Phase 2: adaptive Y sweep per column slot ────────────────────────
-      // Each column slot sweeps rows independently with the same adaptive
-      // stepping as the greedy algorithm, so 1-row blocks (10 m) advance
-      // only 15 m instead of the fixed 25 m grid that wasted 15 m of space.
-      // Within each slot, ncols falls back below bestN when fewer columns
-      // fit at a given Y position (still keeps the vertical corridor straight).
       const blocks = [];
       for (const { xDist, bestN } of colData) {
         let rowDist = -diag / 2 + offY;
-        const maxRowSteps = Math.ceil(diag / SPACE_H) + 10;
+        const maxRowSteps = Math.ceil(diag / spaceH) + 10;
         let rowSteps = 0;
         while (rowDist < diag / 2 && rowSteps++ < maxRowSteps) {
           const ox = cx + rowDist * uy.x + xDist * ux.x;
           const oy = cy + rowDist * uy.y + xDist * ux.y;
           let placed = false;
-          outer: for (let nrows = ROWS; nrows >= 1; nrows--) {
-            const h = nrows * SPACE_H;
+          outer: for (let nrows = maxRows; nrows >= 1; nrows--) {
+            const h = nrows * spaceH;
             for (let ncols = bestN; ncols >= 1; ncols--) {
-              if (isBlockInside(blockCorners(ox, oy, ncols * SPACE_W, h, rad), polyLocal)) {
+              if (isBlockInside(blockCorners(ox, oy, ncols * spaceW, h, rad), polyLocal)) {
                 blocks.push({ ox, oy, ncols, nrows });
-                rowDist += h + PATH_W;
+                rowDist += h + pathW;
                 placed = true;
                 break outer;
               }
             }
           }
-          if (!placed) rowDist += SPACE_H;
+          if (!placed) rowDist += spaceH;
         }
       }
 
@@ -798,7 +932,7 @@
 
     function renderAllBlocks(results) {
       resetSpatialState();
-      results.forEach((result, i) => renderBlocks(result, i));
+      results.forEach((result, i) => renderBlocks(result, i, getProductForPoly(i)));
     }
 
     function clearPolyLayers(polyIndex) {
@@ -812,8 +946,10 @@
       polyResults.delete(polyIndex);
     }
 
-    function renderBlocks(result, polyIndex) {
+    function renderBlocks(result, polyIndex, product) {
       const { blocks, rad, cLat, cLng, f } = result;
+      const { spaceW, spaceH, color } = product;
+      const strokeColor = darkenHex(color);
       const layers = [];
 
       for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
@@ -823,17 +959,18 @@
         // Individual spaces
         for (let row = 0; row < nrows; row++) {
           for (let col = 0; col < ncols; col++) {
-            const corners = spaceCorners(ox, oy, col, row, rad);
+            const corners = spaceCorners(ox, oy, col, row, rad, spaceW, spaceH);
             const latLngs = corners.map(c => toGeo(c.x, c.y, cLat, cLng, f));
             const spaceLayer = L.polygon(latLngs, {
-              color: '#16a34a',
-              fillColor: '#4ade80',
+              color: strokeColor,
+              fillColor: color,
               fillOpacity: 0.75,
               weight: 1
             }).addTo(spacesLayer);
             spaceLayer._polyIndex = polyIndex;
             spaceLayer._blockKey  = blockKey;
-            // Single click with delay to distinguish from double-click
+            spaceLayer._fillColor   = color;
+            spaceLayer._strokeColor = strokeColor;
             spaceLayer.on('click', e => {
               L.DomEvent.stopPropagation(e);
               clearTimeout(spaceLayer._clickTimer);
@@ -848,10 +985,10 @@
           }
         }
         // Block outline (not selectable)
-        const corners = blockCorners(ox, oy, ncols * SPACE_W, nrows * SPACE_H, rad);
+        const corners = blockCorners(ox, oy, ncols * spaceW, nrows * spaceH, rad);
         const latLngs = corners.map(c => toGeo(c.x, c.y, cLat, cLng, f));
         layers.push(L.polygon(latLngs, {
-          color: '#fbbf24',
+          color,
           fillOpacity: 0,
           weight: 2,
           dashArray: '6 4',
@@ -860,14 +997,14 @@
       }
 
       polyLayers.set(polyIndex, layers);
-      polyResults.set(polyIndex, { blocks, spaces: totalSpacesOf(blocks) });
+      polyResults.set(polyIndex, { blocks, spaces: totalSpacesOf(blocks), productId: product.id });
     }
 
     // ── Selection helpers ─────────────────────────────────────────────────────
     function toggleSpace(layer) {
       if (selectedSpaces.has(layer)) {
         selectedSpaces.delete(layer);
-        layer.setStyle({ fillColor: '#4ade80', color: '#16a34a', fillOpacity: 0.75 });
+        layer.setStyle({ fillColor: layer._fillColor, color: layer._strokeColor, fillOpacity: 0.75 });
       } else {
         selectedSpaces.add(layer);
         layer.setStyle({ fillColor: '#93c5fd', color: '#3b82f6', fillOpacity: 0.9 });
@@ -878,7 +1015,7 @@
     function clearSelectionState() {
       for (const layer of selectedSpaces) {
         if (spacesLayer.hasLayer(layer))
-          layer.setStyle({ fillColor: '#4ade80', color: '#16a34a', fillOpacity: 0.75 });
+          layer.setStyle({ fillColor: layer._fillColor, color: layer._strokeColor, fillOpacity: 0.75 });
       }
       selectedSpaces.clear();
     }
@@ -952,6 +1089,100 @@
       rectDrawHandler.enable();
     }
 
+    // ── Product management ────────────────────────────────────────────────────
+    let editingProductId = null;
+
+    function renderProductsList() {
+      const list = document.getElementById('productsList');
+      list.innerHTML = products.map(p => `
+        <div class="product-item">
+          <div class="product-swatch" style="background:${p.color};"></div>
+          <div style="flex:1;min-width:0;">
+            <div class="product-name">${p.name}</div>
+            <div class="product-specs">${p.spaceW}×${p.spaceH} m · max ${p.maxCols}×${p.maxRows} · path ${p.pathW} m</div>
+          </div>
+          <button class="btn-xs btn-xs-secondary" onclick="openProductModal(${p.id})">Edit</button>
+          ${products.length > 1 ? `<button class="btn-xs btn-xs-danger" onclick="deleteProduct(${p.id})">✕</button>` : ''}
+        </div>`).join('');
+      renderLegend();
+    }
+
+    function renderLegend() {
+      const list = document.getElementById('legendList');
+      list.innerHTML = products.map(p => `
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:${p.color}; border:1px solid ${darkenHex(p.color)};"></div>
+          ${p.name} (${p.spaceW}×${p.spaceH} m)
+        </div>`).join('');
+    }
+
+    function openProductModal(id = null) {
+      editingProductId = id;
+      const modal = document.getElementById('productModal');
+      document.getElementById('modalTitle').textContent = id ? 'Edit Product Type' : 'Add Product Type';
+      if (id) {
+        const p = products.find(x => x.id === id);
+        document.getElementById('pName').value    = p.name;
+        document.getElementById('pSpaceW').value  = p.spaceW;
+        document.getElementById('pSpaceH').value  = p.spaceH;
+        document.getElementById('pMaxCols').value = p.maxCols;
+        document.getElementById('pMaxRows').value = p.maxRows;
+        document.getElementById('pPathW').value   = p.pathW;
+        document.getElementById('pColor').value   = p.color;
+      } else {
+        document.getElementById('pName').value    = '';
+        document.getElementById('pSpaceW').value  = 5;
+        document.getElementById('pSpaceH').value  = 10;
+        document.getElementById('pMaxCols').value = 10;
+        document.getElementById('pMaxRows').value = 2;
+        document.getElementById('pPathW').value   = 5;
+        document.getElementById('pColor').value   = '#60a5fa';
+      }
+      modal.classList.add('open');
+    }
+
+    function closeProductModal() {
+      document.getElementById('productModal').classList.remove('open');
+      editingProductId = null;
+    }
+
+    function saveProduct() {
+      const name    = document.getElementById('pName').value.trim() || 'Product';
+      const spaceW  = parseFloat(document.getElementById('pSpaceW').value)  || 5;
+      const spaceH  = parseFloat(document.getElementById('pSpaceH').value)  || 10;
+      const maxCols = parseInt(document.getElementById('pMaxCols').value)   || 10;
+      const maxRows = parseInt(document.getElementById('pMaxRows').value)   || 2;
+      const pathW   = parseFloat(document.getElementById('pPathW').value)   || 5;
+      const color   = document.getElementById('pColor').value;
+
+      if (editingProductId) {
+        const p = products.find(x => x.id === editingProductId);
+        Object.assign(p, { name, spaceW, spaceH, maxCols, maxRows, pathW, color });
+      } else {
+        products.push({ id: nextProductId++, name, spaceW, spaceH, maxCols, maxRows, pathW, color });
+      }
+      closeProductModal();
+      renderProductsList();
+      updateAreasList();
+    }
+
+    function deleteProduct(id) {
+      if (products.length <= 1) return;
+      const idx = products.findIndex(p => p.id === id);
+      if (idx === -1) return;
+      products.splice(idx, 1);
+      // Reassign polygons using deleted product to first available
+      for (const [pi, pid] of polygonProducts) {
+        if (pid === id) polygonProducts.set(pi, products[0].id);
+      }
+      renderProductsList();
+      updateAreasList();
+    }
+
+    function setPolygonProduct(polyIndex, productId) {
+      polygonProducts.set(polyIndex, parseInt(productId));
+    }
+
     // Rebuild the Areas sidebar list
     function updateAreasList() {
       const section = document.getElementById('areasSection');
@@ -963,9 +1194,14 @@
       section.style.display = 'block';
       list.innerHTML = drawnPolygons.map((poly, i) => {
         const area = Math.round(turf.area(poly.toGeoJSON())).toLocaleString('nl-NL');
+        const pid = polygonProducts.get(i) || products[0].id;
+        const opts = products.map(p => `<option value="${p.id}"${p.id === pid ? ' selected' : ''}>${p.name}</option>`).join('');
         return `<div class="area-entry">
-          <span class="area-label">Area ${i + 1} <small>(${area} m²)</small></span>
-          <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.72rem;flex-shrink:0;" onclick="selectAllInPolygon(${i})">Select all</button>
+          <div class="area-entry-top">
+            <span class="area-label">Area ${i + 1} <small>(${area} m²)</small></span>
+            <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.72rem;flex-shrink:0;" onclick="selectAllInPolygon(${i})">Select all</button>
+          </div>
+          <select onchange="setPolygonProduct(${i}, this.value)">${opts}</select>
         </div>`;
       }).join('');
     }
@@ -1003,12 +1239,13 @@
           // Partial update — only re-run polygons with selected spaces,
           // then re-select all spaces in those areas so they stay highlighted
           for (const i of targetIndices) {
+            const product = getProductForPoly(i);
             clearPolyLayers(i);
-            renderBlocks(placer(drawnPolygons[i], angleDeg, offX, offY), i);
+            renderBlocks(placer(drawnPolygons[i], angleDeg, offX, offY, product), i, product);
             selectAllInPolygon(i);
           }
         } else {
-          const results = drawnPolygons.map((poly, i) => placer(poly, angleDeg, offX, offY));
+          const results = drawnPolygons.map((poly, i) => placer(poly, angleDeg, offX, offY, getProductForPoly(i)));
           renderAllBlocks(results);
         }
 
@@ -1034,9 +1271,6 @@
     function optimize() {
       if (drawnPolygons.length === 0) return;
       const targetIndices = getTargetPolyIndices();
-      const targetPolys = targetIndices
-        ? [...targetIndices].map(i => drawnPolygons[i])
-        : drawnPolygons;
 
       setStatus('Optimizing rotation & offset…', 'busy');
 
@@ -1049,12 +1283,14 @@
         const offsetStepsX = [0, 11, 22, 33, 44];
         const offsetStepsY = [0, 5, 10, 15, 20];
 
+        const targetPolyIndices = targetIndices ? [...targetIndices] : drawnPolygons.map((_, i) => i);
+
         for (let a = 0; a < 90; a++) {
           for (const ox of offsetStepsX) {
             for (const oy of offsetStepsY) {
               let spaces = 0;
-              for (const poly of targetPolys) {
-                spaces += totalSpacesOf(placer(poly, a, ox, oy).blocks);
+              for (const i of targetPolyIndices) {
+                spaces += totalSpacesOf(placer(drawnPolygons[i], a, ox, oy, getProductForPoly(i)).blocks);
               }
               if (spaces > best.spaces) {
                 best = { spaces, angleDeg: a, offX: ox, offY: oy };
@@ -1069,12 +1305,13 @@
 
         if (targetIndices) {
           for (const i of targetIndices) {
+            const product = getProductForPoly(i);
             clearPolyLayers(i);
-            renderBlocks(placer(drawnPolygons[i], best.angleDeg, best.offX, best.offY), i);
+            renderBlocks(placer(drawnPolygons[i], best.angleDeg, best.offX, best.offY, product), i, product);
             selectAllInPolygon(i);
           }
         } else {
-          renderAllBlocks(drawnPolygons.map(poly => placer(poly, best.angleDeg, best.offX, best.offY)));
+          renderAllBlocks(drawnPolygons.map((poly, i) => placer(poly, best.angleDeg, best.offX, best.offY, getProductForPoly(i))));
         }
 
         const { totalBlocks: count, totalSpaces: spaces } = getTotalStats();
@@ -1104,6 +1341,7 @@
       drawnItems.clearLayers();
       resetSpatialState();
       drawnPolygons = [];
+      polygonProducts.clear();
       document.getElementById('calcBtn').disabled = true;
       document.getElementById('optBtn').disabled = true;
       document.getElementById('rectSelectBtn').disabled = true;
