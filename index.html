@@ -1681,7 +1681,7 @@
     }
 
     async function pushToArcGIS() {
-      const layerUrl = document.getElementById('arcLayerWriteUrl').value.trim();
+      const layerUrl = document.getElementById('arcLayerWriteUrl').value.trim().replace(/\/+$/, '');
       if (!layerUrl) { setStatus('Enter the ArcGIS feature layer URL first.', ''); return; }
       if (!arcToken)  { setStatus('Not authenticated with ArcGIS.', ''); return; }
 
@@ -1691,15 +1691,24 @@
         const resp = await fetch(`/arc-proxy?target=${encodeURIComponent(endpoint)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ ...body, token: arcToken, f: 'json' })
+          body: new URLSearchParams({ ...body, token: arcToken, f: 'json', referer: window.location.origin })
         });
-        return resp.json();
+        const text = await resp.text();
+        console.log(`[ArcGIS] ${endpoint}:`, text);
+        try { return JSON.parse(text); } catch (_e) { throw new Error(`Non-JSON response: ${text.slice(0, 200)}`); }
+      };
+
+      const arcError = r => {
+        if (!r.error) return null;
+        const e = r.error;
+        return typeof e === 'string' ? e : (e.message || e.description || JSON.stringify(e));
       };
 
       try {
         // 1. Delete all existing features
-        const delResult = await proxyPost(`${layerUrl}/deleteFeatures`, { where: '1=1' });
-        if (delResult.error) throw new Error(delResult.error.message);
+        const delResult = await proxyPost(`${layerUrl}/deleteFeatures`, { where: '1=1', rollbackOnFailure: 'false' });
+        const delErr = arcError(delResult);
+        if (delErr) throw new Error(`deleteFeatures: ${delErr}`);
 
         // 2. Build feature array
         const arcFeatures = [];
@@ -1728,7 +1737,8 @@
           const addResult = await proxyPost(`${layerUrl}/addFeatures`, {
             features: JSON.stringify(chunk)
           });
-          if (addResult.error) throw new Error(addResult.error.message);
+          const addErr = arcError(addResult);
+          if (addErr) throw new Error(`addFeatures: ${addErr}`);
         }
 
         setStatus(`${arcFeatures.length} spaces pushed to ArcGIS.`, 'ok');

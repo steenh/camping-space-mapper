@@ -23,7 +23,7 @@ export async function onRequestPost(context) {
   }
 
   let targetUrl;
-  try { targetUrl = new URL(target); } catch {
+  try { targetUrl = new URL(target); } catch (_e) {
     return new Response(JSON.stringify({ error: 'Invalid target URL' }), {
       status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
@@ -35,10 +35,14 @@ export async function onRequestPost(context) {
     });
   }
 
-  const body = await context.request.text();
+  const body    = await context.request.text();
+  const referer = context.request.headers.get('Referer') || context.request.headers.get('Origin') || '';
   const upstream = await fetch(target, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      ...(referer ? { 'Referer': referer } : {}),
+    },
     body,
   });
 
