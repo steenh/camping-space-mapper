@@ -265,7 +265,7 @@
       </div>
       <div class="instruction-step">
         <div class="step-num">2</div>
-        <div class="step-text">Click the polygon tool <strong>(pentagon icon)</strong> on the map and draw your area</div>
+        <div class="step-text">Click the polygon tool <strong>(pentagon icon)</strong> on the map and draw one or more areas</div>
       </div>
       <div class="instruction-step">
         <div class="step-num">3</div>
@@ -420,35 +420,43 @@
     });
     map.addControl(drawControl);
 
-    let drawnPolygon = null;
+    let drawnPolygons = [];
+
+    function updateAreaDisplay() {
+      const total = drawnPolygons.reduce((s, p) => s + turf.area(p.toGeoJSON()), 0);
+      document.getElementById('totalArea').textContent = Math.round(total).toLocaleString('nl-NL');
+    }
 
     map.on(L.Draw.Event.CREATED, e => {
-      drawnItems.clearLayers();
-      drawnPolygon = e.layer;
-      drawnItems.addLayer(drawnPolygon);
-
-      const area = turf.area(drawnPolygon.toGeoJSON());
-      document.getElementById('totalArea').textContent = Math.round(area).toLocaleString('nl-NL');
+      drawnPolygons.push(e.layer);
+      drawnItems.addLayer(e.layer);
+      updateAreaDisplay();
       document.getElementById('calcBtn').disabled = false;
       document.getElementById('optBtn').disabled = false;
-      setStatus('Polygon drawn. Click Calculate or Optimize.', 'info');
+      const n = drawnPolygons.length;
+      setStatus(`${n} polygon${n > 1 ? 's' : ''} drawn. Click Calculate or Optimize.`, 'info');
       clearResults();
     });
 
     map.on(L.Draw.Event.EDITED, () => {
-      if (drawnItems.getLayers().length > 0) {
-        drawnPolygon = drawnItems.getLayers()[0];
-        const area = turf.area(drawnPolygon.toGeoJSON());
-        document.getElementById('totalArea').textContent = Math.round(area).toLocaleString('nl-NL');
-        spacesLayer.clearLayers();
-        clearResults();
-        setStatus('Polygon edited. Recalculate to update.', 'info');
-      }
+      drawnPolygons = drawnItems.getLayers();
+      updateAreaDisplay();
+      spacesLayer.clearLayers();
+      clearResults();
+      setStatus('Polygon(s) edited. Recalculate to update.', 'info');
     });
 
     map.on(L.Draw.Event.DELETED, () => {
-      drawnPolygon = null;
-      clearAll();
+      drawnPolygons = drawnItems.getLayers();
+      if (drawnPolygons.length === 0) {
+        clearAll();
+      } else {
+        updateAreaDisplay();
+        spacesLayer.clearLayers();
+        clearResults();
+        const n = drawnPolygons.length;
+        setStatus(`${n} polygon${n > 1 ? 's' : ''} remaining. Recalculate to update.`, 'info');
+      }
     });
 
     // ── Coordinate helpers ────────────────────────────────────────────────────
@@ -709,8 +717,12 @@
       return blocks.reduce((s, b) => s + b.ncols * b.nrows, 0);
     }
 
-    function renderBlocks(result) {
+    function renderAllBlocks(results) {
       spacesLayer.clearLayers();
+      for (const result of results) renderBlocks(result);
+    }
+
+    function renderBlocks(result) {
       const { blocks, rad, cLat, cLng, f } = result;
 
       for (const { ox, oy, ncols, nrows } of blocks) {
@@ -741,7 +753,7 @@
 
     // ── UI actions ────────────────────────────────────────────────────────────
     function calculate(silent = false) {
-      if (!drawnPolygon) return;
+      if (drawnPolygons.length === 0) return;
       if (!silent) setStatus('Calculating…', 'busy');
 
       const angleDeg = parseFloat(document.getElementById('rotation').value) || 0;
@@ -749,16 +761,15 @@
       const offY     = parseFloat(document.getElementById('offsetY').value)  || 0;
 
       const straight = document.getElementById('straightPaths').checked;
+      const placer = straight ? runPlacementStraight : runPlacement;
 
       // Small timeout so the status bar renders before heavy computation
       setTimeout(() => {
-        const result = straight
-          ? runPlacementStraight(drawnPolygon, angleDeg, offX, offY)
-          : runPlacement(drawnPolygon, angleDeg, offX, offY);
-        renderBlocks(result);
+        const results = drawnPolygons.map(poly => placer(poly, angleDeg, offX, offY));
+        renderAllBlocks(results);
 
-        const count = result.blocks.length;
-        const spaces = totalSpacesOf(result.blocks);
+        const count  = results.reduce((s, r) => s + r.blocks.length, 0);
+        const spaces = results.reduce((s, r) => s + totalSpacesOf(r.blocks), 0);
         document.getElementById('totalSpaces').textContent = spaces.toLocaleString('nl-NL');
         document.getElementById('totalBlocks').textContent = count;
         document.getElementById('bestRot').textContent = angleDeg + '°';
@@ -777,7 +788,7 @@
     }
 
     function optimize() {
-      if (!drawnPolygon) return;
+      if (drawnPolygons.length === 0) return;
       setStatus('Optimizing rotation & offset…', 'busy');
 
       const straight = document.getElementById('straightPaths').checked;
@@ -792,8 +803,10 @@
         for (let a = 0; a < 90; a++) {
           for (const ox of offsetStepsX) {
             for (const oy of offsetStepsY) {
-              const result = placer(drawnPolygon, a, ox, oy);
-              const spaces = totalSpacesOf(result.blocks);
+              let spaces = 0;
+              for (const poly of drawnPolygons) {
+                spaces += totalSpacesOf(placer(poly, a, ox, oy).blocks);
+              }
               if (spaces > best.spaces) {
                 best = { spaces, angleDeg: a, offX: ox, offY: oy };
               }
@@ -806,11 +819,11 @@
         document.getElementById('offsetX').value  = best.offX;
         document.getElementById('offsetY').value  = best.offY;
 
-        const result = placer(drawnPolygon, best.angleDeg, best.offX, best.offY);
-        renderBlocks(result);
+        const results = drawnPolygons.map(poly => placer(poly, best.angleDeg, best.offX, best.offY));
+        renderAllBlocks(results);
 
-        const count = result.blocks.length;
-        const spaces = totalSpacesOf(result.blocks);
+        const count  = results.reduce((s, r) => s + r.blocks.length, 0);
+        const spaces = results.reduce((s, r) => s + totalSpacesOf(r.blocks), 0);
         document.getElementById('totalSpaces').textContent = spaces.toLocaleString('nl-NL');
         document.getElementById('totalBlocks').textContent = count;
         document.getElementById('bestRot').textContent = best.angleDeg + '°';
@@ -829,9 +842,10 @@
     function clearAll() {
       drawnItems.clearLayers();
       spacesLayer.clearLayers();
-      drawnPolygon = null;
+      drawnPolygons = [];
       document.getElementById('calcBtn').disabled = true;
       document.getElementById('optBtn').disabled = true;
+      document.getElementById('totalArea').textContent = '—';
       clearResults();
       setStatus('Draw a polygon to get started.', '');
     }
