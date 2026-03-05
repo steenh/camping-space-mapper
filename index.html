@@ -468,14 +468,14 @@
     }
 
     // ── Geometry helpers ──────────────────────────────────────────────────────
-    // Variable-width block corners (w = ncols * SPACE_W)
-    function blockCorners(ox, oy, w, rad) {
+    // Block corners — w = block width (m), h = block height (m)
+    function blockCorners(ox, oy, w, h, rad) {
       const cos = Math.cos(rad), sin = Math.sin(rad);
       return [
-        { x: ox,                              y: oy },
-        { x: ox + w * cos,                    y: oy + w * sin },
-        { x: ox + w * cos - BLOCK_H * sin,    y: oy + w * sin + BLOCK_H * cos },
-        { x: ox - BLOCK_H * sin,              y: oy + BLOCK_H * cos }
+        { x: ox,                   y: oy },
+        { x: ox + w * cos,         y: oy + w * sin },
+        { x: ox + w * cos - h * sin, y: oy + w * sin + h * cos },
+        { x: ox - h * sin,         y: oy + h * cos }
       ];
     }
 
@@ -531,15 +531,16 @@
     }
 
     // ── Core placement algorithm ──────────────────────────────────────────────
-    // Row-by-row greedy sweep: at each position try widths 10→1 (ncols),
-    // place the widest that fits, then jump past it + path.
+    // Row-by-row greedy sweep. At each position tries (nrows=2, ncols=10→1)
+    // then (nrows=1, ncols=10→1) so 2-row groups are always preferred but
+    // 1-row groups fill spots where 2-row ones don't fit.
+    // The Y step after each row equals the tallest block placed + 5 m path.
     function runPlacement(polygon, angleDeg, offX, offY) {
       const geo = polygon.toGeoJSON();
-      const cent = turf.centroid(geo).geometry.coordinates; // [lng, lat]
+      const cent = turf.centroid(geo).geometry.coordinates;
       const cLng = cent[0], cLat = cent[1];
       const f = getFactors(cLat);
 
-      // Convert polygon to local metres (skip closing duplicate vertex)
       const rawCoords = geo.geometry.coordinates[0];
       const polyLocal = rawCoords.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
 
@@ -550,51 +551,47 @@
 
       const rad = angleDeg * Math.PI / 180;
       const cos = Math.cos(rad), sin = Math.sin(rad);
+      const ux = { x: cos,  y: sin };
+      const uy = { x: -sin, y: cos };
 
-      // Unit vectors along column (ux) and row (uy) directions
-      const ux = { x: cos,  y: sin };   // 1 m in column direction
-      const uy = { x: -sin, y: cos };   // 1 m in row direction
-
-      // Sweep range covers the full polygon diagonal with margin
       const diag = Math.sqrt(polyW * polyW + polyH * polyH) + 100;
-      const nRows = Math.ceil(diag / STEP_Y) + 4;
-
-      // Centre of polygon bounding box
       const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
 
       const blocks = [];
+      let rowDist = -diag / 2 + offY;
 
-      for (let rowIdx = 0; rowIdx < nRows; rowIdx++) {
-        // Row band Y-offset from centre (user offY shifts the whole grid)
-        const rowDist = -diag / 2 + rowIdx * STEP_Y + offY;
-
-        // Base point for this row
+      while (rowDist < diag / 2) {
         const rowBX = cx + rowDist * uy.x;
         const rowBY = cy + rowDist * uy.y;
 
-        // Greedy X sweep along column direction
         let xDist = -diag / 2 + offX;
+        let rowMaxH = 0;
 
         while (xDist < diag / 2) {
           const ox = rowBX + xDist * ux.x;
           const oy = rowBY + xDist * ux.y;
 
           let placed = false;
-          // Try widths from maximum (10 cols) down to minimum (1 col)
-          for (let ncols = COLS; ncols >= 1; ncols--) {
-            const w = ncols * SPACE_W;
-            if (isBlockInside(blockCorners(ox, oy, w, rad), polyLocal)) {
-              blocks.push({ ox, oy, ncols });
-              xDist += w + PATH_W;  // jump past placed block + path
-              placed = true;
-              break;
+          // Try 2-row blocks (ncols 10→1), then 1-row blocks (ncols 10→1)
+          outer: for (let nrows = ROWS; nrows >= 1; nrows--) {
+            const h = nrows * SPACE_H;
+            for (let ncols = COLS; ncols >= 1; ncols--) {
+              if (isBlockInside(blockCorners(ox, oy, ncols * SPACE_W, h, rad), polyLocal)) {
+                blocks.push({ ox, oy, ncols, nrows });
+                xDist += ncols * SPACE_W + PATH_W;
+                if (h > rowMaxH) rowMaxH = h;
+                placed = true;
+                break outer;
+              }
             }
           }
 
-          if (!placed) {
-            xDist += SPACE_W;  // no block fits here; try 5 m further
-          }
+          if (!placed) xDist += SPACE_W;
         }
+
+        // Advance Y by tallest block in this row + path; if row was empty move by
+        // the minimum block height so we don't loop forever on a tiny polygon
+        rowDist += rowMaxH > 0 ? rowMaxH + PATH_W : SPACE_H;
       }
 
       return { blocks, rad, cLat, cLng, f };
@@ -645,31 +642,43 @@
       const blocks = [];
 
       for (const xDist of colSlots) {
-        // For each row find the max ncols that fits at this slot (0 = nothing fits)
+        // For each row find the best (ncols, nrows) that fits at this slot.
+        // 2-row is tried first; 1-row is the fallback.
         const capacity = rowBases.map(base => {
           const ox = base.x + xDist * ux.x;
           const oy = base.y + xDist * ux.y;
           for (let n = COLS; n >= 1; n--) {
-            if (isBlockInside(blockCorners(ox, oy, n * SPACE_W, rad), polyLocal)) return n;
+            if (isBlockInside(blockCorners(ox, oy, n * SPACE_W, BLOCK_H, rad), polyLocal))
+              return { ncols: n, nrows: 2 };
           }
-          return 0;
+          for (let n = COLS; n >= 1; n--) {
+            if (isBlockInside(blockCorners(ox, oy, n * SPACE_W, SPACE_H, rad), polyLocal))
+              return { ncols: n, nrows: 1 };
+          }
+          return null;
         });
 
-        // Pick the width W that maximises W × (rows where capacity >= W)
+        // Pick the uniform column width W that maximises total spaces across all rows.
+        // Score = sum of nrows for every row where capacity.ncols >= W, multiplied by W.
         let bestN = 0, bestScore = 0;
         for (let n = COLS; n >= 1; n--) {
-          const score = n * capacity.filter(c => c >= n).length;
+          let score = 0;
+          for (const cap of capacity) {
+            if (cap && cap.ncols >= n) score += cap.nrows * n;
+          }
           if (score > bestScore) { bestScore = score; bestN = n; }
         }
         if (bestN === 0) continue;
 
-        // Place uniform-width blocks in every eligible row
+        // Place uniform-width blocks — each row independently chooses nrows
         for (let rowIdx = 0; rowIdx < nRows; rowIdx++) {
-          if (capacity[rowIdx] >= bestN) {
+          const cap = capacity[rowIdx];
+          if (cap && cap.ncols >= bestN) {
             blocks.push({
               ox: rowBases[rowIdx].x + xDist * ux.x,
               oy: rowBases[rowIdx].y + xDist * ux.y,
-              ncols: bestN
+              ncols: bestN,
+              nrows: cap.nrows
             });
           }
         }
@@ -687,16 +696,16 @@
 
     // ── Render helpers ────────────────────────────────────────────────────────
     function totalSpacesOf(blocks) {
-      return blocks.reduce((s, b) => s + b.ncols * ROWS, 0);
+      return blocks.reduce((s, b) => s + b.ncols * b.nrows, 0);
     }
 
     function renderBlocks(result) {
       spacesLayer.clearLayers();
       const { blocks, rad, cLat, cLng, f } = result;
 
-      for (const { ox, oy, ncols } of blocks) {
-        // Individual spaces (only up to ncols wide)
-        for (let row = 0; row < ROWS; row++) {
+      for (const { ox, oy, ncols, nrows } of blocks) {
+        // Individual spaces
+        for (let row = 0; row < nrows; row++) {
           for (let col = 0; col < ncols; col++) {
             const corners = spaceCorners(ox, oy, col, row, rad);
             const latLngs = corners.map(c => toGeo(c.x, c.y, cLat, cLng, f));
@@ -708,8 +717,8 @@
             }).addTo(spacesLayer);
           }
         }
-        // Block outline (width = ncols * SPACE_W)
-        const corners = blockCorners(ox, oy, ncols * SPACE_W, rad);
+        // Block outline
+        const corners = blockCorners(ox, oy, ncols * SPACE_W, nrows * SPACE_H, rad);
         const latLngs = corners.map(c => toGeo(c.x, c.y, cLat, cLng, f));
         L.polygon(latLngs, {
           color: '#fbbf24',
