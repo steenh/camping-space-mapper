@@ -395,9 +395,12 @@
           <span style="font-size:0.78rem;color:#cbd5e1;">AllEditables layer</span>
           <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f97316;flex-shrink:0;"></span>
         </div>
+        <div class="btn-row" style="margin-bottom:6px;">
+          <button class="btn btn-secondary" id="arcRectBtn" onclick="toggleFeatureRectSelect()">Box select</button>
+          <button class="btn btn-secondary" id="arcPolyBtn" onclick="toggleFeaturePolySelect()">Poly select</button>
+        </div>
         <div class="btn-row" style="margin-bottom:8px;">
-          <button class="btn btn-secondary" id="arcRectBtn" onclick="toggleFeatureRectSelect()">Select features</button>
-          <button class="btn btn-secondary" id="arcClearBtn" onclick="clearArcSelection()" style="display:none;">Clear</button>
+          <button class="btn btn-secondary" id="arcClearBtn" onclick="clearArcSelection()" style="display:none;">Clear selection</button>
         </div>
         <div id="arcFeatureCount" style="font-size:0.73rem;color:#f97316;margin-bottom:8px;min-height:1em;"></div>
         <button class="btn btn-primary" id="arcCreateBtn" onclick="createPolygonFromArcSelection()" disabled style="width:100%;">Create polygon from selection</button>
@@ -651,6 +654,15 @@
     }
 
     map.on(L.Draw.Event.CREATED, e => {
+      // Feature polygon select mode — select ArcGIS features inside drawn polygon
+      if (featurePolyMode) {
+        featurePolyMode = false;
+        featurePolyHandler = null;
+        document.getElementById('arcPolyBtn').classList.remove('btn-select-active');
+        map.getContainer().style.cursor = '';
+        selectArcFeaturesInPolygon(e.layer);
+        return;
+      }
       // Feature rectangle select mode — select ArcGIS features
       if (featureRectMode) {
         featureRectMode = false;
@@ -1143,6 +1155,8 @@
     const selectedArcFeatures = new Set();
     let featureRectMode    = false;
     let featureRectHandler = null;
+    let featurePolyMode    = false;
+    let featurePolyHandler = null;
 
     function getRedirectUri() {
       return window.location.origin + window.location.pathname;
@@ -1249,6 +1263,39 @@
       updateArcUI();
     }
 
+    function selectArcFeaturesInPolygon(drawnLayer) {
+      if (!arcFeatureLayer) return;
+      const drawnGeo = drawnLayer.toGeoJSON();
+      arcFeatureLayer.eachFeature(layer => {
+        try {
+          if (!selectedArcFeatures.has(layer) && turf.booleanIntersects(drawnGeo, layer.toGeoJSON())) {
+            selectedArcFeatures.add(layer);
+            layer.setStyle(ARC_SELECTED_STYLE);
+          }
+        } catch (_) {}
+      });
+      updateArcUI();
+    }
+
+    function toggleFeaturePolySelect() {
+      if (featureRectMode) toggleFeatureRectSelect(); // cancel other mode
+      if (featurePolyMode) {
+        featurePolyMode = false;
+        if (featurePolyHandler) { featurePolyHandler.disable(); featurePolyHandler = null; }
+        document.getElementById('arcPolyBtn').classList.remove('btn-select-active');
+        map.getContainer().style.cursor = '';
+        return;
+      }
+      featurePolyMode = true;
+      document.getElementById('arcPolyBtn').classList.add('btn-select-active');
+      map.getContainer().style.cursor = 'crosshair';
+      featurePolyHandler = new L.Draw.Polygon(map, {
+        allowIntersection: false,
+        shapeOptions: { color: '#f97316', weight: 2, fillOpacity: 0.1, fillColor: '#f97316', dashArray: '4 4' }
+      });
+      featurePolyHandler.enable();
+    }
+
     function clearArcSelection() {
       for (const layer of selectedArcFeatures) layer.setStyle(ARC_DEFAULT_STYLE);
       selectedArcFeatures.clear();
@@ -1256,6 +1303,7 @@
     }
 
     function toggleFeatureRectSelect() {
+      if (featurePolyMode) toggleFeaturePolySelect(); // cancel other mode
       if (featureRectMode) {
         featureRectMode = false;
         if (featureRectHandler) { featureRectHandler.disable(); featureRectHandler = null; }
@@ -1275,19 +1323,16 @@
     function createPolygonFromArcSelection() {
       if (selectedArcFeatures.size === 0) return;
       const geojsonFeatures = [...selectedArcFeatures].map(l => l.toGeoJSON());
-      let union = geojsonFeatures[0];
-      for (let i = 1; i < geojsonFeatures.length; i++) {
-        try { union = turf.union(union, geojsonFeatures[i]); } catch (_) {}
-      }
-      const type = union.geometry.type;
-      const polysToAdd = type === 'MultiPolygon'
-        ? union.geometry.coordinates.map(rings => turf.polygon(rings))
-        : [union];
-      for (const poly of polysToAdd) {
-        const lyr = L.geoJSON(poly, { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.12, weight: 2 }).getLayers()[0];
-        drawnPolygons.push(lyr);
-        drawnItems.addLayer(lyr);
-      }
+
+      // Convex hull of all selected features → always one outer boundary polygon
+      const collection = turf.featureCollection(geojsonFeatures);
+      const hull = turf.convex(collection);
+      if (!hull) { setStatus('Could not compute boundary — try selecting more features.', ''); return; }
+
+      const lyr = L.geoJSON(hull, { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.12, weight: 2 }).getLayers()[0];
+      drawnPolygons.push(lyr);
+      drawnItems.addLayer(lyr);
+
       clearArcSelection();
       updateAreaDisplay();
       updateAreasList();
@@ -1295,7 +1340,7 @@
       document.getElementById('optBtn').disabled  = false;
       document.getElementById('rectSelectBtn').disabled = false;
       const n = drawnPolygons.length;
-      setStatus(`${polysToAdd.length} polygon${polysToAdd.length !== 1 ? 's' : ''} created from ArcGIS selection. ${n} area${n !== 1 ? 's' : ''} total.`, 'info');
+      setStatus(`Polygon created from ${geojsonFeatures.length} selected features. ${n} area${n !== 1 ? 's' : ''} total.`, 'info');
     }
 
     function updateArcUI() {
