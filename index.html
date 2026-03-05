@@ -744,19 +744,33 @@
         }
       }
 
-      // ── Phase 2: place blocks ─────────────────────────────────────────────
+      // ── Phase 2: adaptive Y sweep per column slot ────────────────────────
+      // Each column slot sweeps rows independently with the same adaptive
+      // stepping as the greedy algorithm, so 1-row blocks (10 m) advance
+      // only 15 m instead of the fixed 25 m grid that wasted 15 m of space.
+      // Within each slot, ncols falls back below bestN when fewer columns
+      // fit at a given Y position (still keeps the vertical corridor straight).
       const blocks = [];
-      for (const { xDist, bestN, capacity } of colData) {
-        for (let rowIdx = 0; rowIdx < nRows; rowIdx++) {
-          const cap = capacity[rowIdx];
-          if (cap && cap.ncols >= bestN) {
-            blocks.push({
-              ox: rowBases[rowIdx].x + xDist * ux.x,
-              oy: rowBases[rowIdx].y + xDist * ux.y,
-              ncols: bestN,
-              nrows: cap.nrows
-            });
+      for (const { xDist, bestN } of colData) {
+        let rowDist = -diag / 2 + offY;
+        const maxRowSteps = Math.ceil(diag / SPACE_H) + 10;
+        let rowSteps = 0;
+        while (rowDist < diag / 2 && rowSteps++ < maxRowSteps) {
+          const ox = cx + rowDist * uy.x + xDist * ux.x;
+          const oy = cy + rowDist * uy.y + xDist * ux.y;
+          let placed = false;
+          outer: for (let nrows = ROWS; nrows >= 1; nrows--) {
+            const h = nrows * SPACE_H;
+            for (let ncols = bestN; ncols >= 1; ncols--) {
+              if (isBlockInside(blockCorners(ox, oy, ncols * SPACE_W, h, rad), polyLocal)) {
+                blocks.push({ ox, oy, ncols, nrows });
+                rowDist += h + PATH_W;
+                placed = true;
+                break outer;
+              }
+            }
           }
+          if (!placed) rowDist += SPACE_H;
         }
       }
 
@@ -986,11 +1000,12 @@
 
       setTimeout(() => {
         if (targetIndices) {
-          // Partial update — only re-run polygons with selected spaces
-          clearSelection();
+          // Partial update — only re-run polygons with selected spaces,
+          // then re-select all spaces in those areas so they stay highlighted
           for (const i of targetIndices) {
             clearPolyLayers(i);
             renderBlocks(placer(drawnPolygons[i], angleDeg, offX, offY), i);
+            selectAllInPolygon(i);
           }
         } else {
           const results = drawnPolygons.map((poly, i) => placer(poly, angleDeg, offX, offY));
@@ -1053,10 +1068,10 @@
         document.getElementById('offsetY').value  = best.offY;
 
         if (targetIndices) {
-          clearSelection();
           for (const i of targetIndices) {
             clearPolyLayers(i);
             renderBlocks(placer(drawnPolygons[i], best.angleDeg, best.offX, best.offY), i);
+            selectAllInPolygon(i);
           }
         } else {
           renderAllBlocks(drawnPolygons.map(poly => placer(poly, best.angleDeg, best.offX, best.offY)));
