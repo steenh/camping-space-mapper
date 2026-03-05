@@ -333,7 +333,17 @@
           <div class="stat-card-label">Best rotation</div>
           <div class="stat-card-value neutral" id="bestRot">—</div>
         </div>
+        <div class="stat-card" style="grid-column: span 2;">
+          <div class="stat-card-label">Selected spaces</div>
+          <div class="stat-card-value neutral" id="selectedCount">—</div>
+        </div>
       </div>
+    </div>
+    <div class="section" id="selectionActions" style="display:none;">
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="clearSelection()">Clear selection</button>
+      </div>
+      <p style="font-size:0.73rem; color:#64748b; margin-top:8px;">Calculate / Optimize will only re-run the selected areas.</p>
     </div>
 
     <div class="section">
@@ -422,6 +432,11 @@
 
     let drawnPolygons = [];
 
+    // Per-polygon layer and result tracking (for partial re-render on selection)
+    const polyLayers  = new Map(); // polyIndex → Layer[]
+    const polyResults = new Map(); // polyIndex → { blocks, spaces }
+    const selectedSpaces = new Set(); // selected space Layer references
+
     function updateAreaDisplay() {
       const total = drawnPolygons.reduce((s, p) => s + turf.area(p.toGeoJSON()), 0);
       document.getElementById('totalArea').textContent = Math.round(total).toLocaleString('nl-NL');
@@ -441,7 +456,8 @@
     map.on(L.Draw.Event.EDITED, () => {
       drawnPolygons = drawnItems.getLayers();
       updateAreaDisplay();
-      spacesLayer.clearLayers();
+      resetSpatialState();
+      updateSelectionDisplay();
       clearResults();
       setStatus('Polygon(s) edited. Recalculate to update.', 'info');
     });
@@ -452,7 +468,8 @@
         clearAll();
       } else {
         updateAreaDisplay();
-        spacesLayer.clearLayers();
+        resetSpatialState();
+        updateSelectionDisplay();
         clearResults();
         const n = drawnPolygons.length;
         setStatus(`${n} polygon${n > 1 ? 's' : ''} remaining. Recalculate to update.`, 'info');
@@ -717,13 +734,32 @@
       return blocks.reduce((s, b) => s + b.ncols * b.nrows, 0);
     }
 
-    function renderAllBlocks(results) {
+    function resetSpatialState() {
       spacesLayer.clearLayers();
-      for (const result of results) renderBlocks(result);
+      polyLayers.clear();
+      polyResults.clear();
+      clearSelectionState();
     }
 
-    function renderBlocks(result) {
+    function renderAllBlocks(results) {
+      resetSpatialState();
+      results.forEach((result, i) => renderBlocks(result, i));
+    }
+
+    function clearPolyLayers(polyIndex) {
+      const layers = polyLayers.get(polyIndex) || [];
+      // Remove any selected spaces in this polygon from the selection set first
+      for (const l of layers) {
+        selectedSpaces.delete(l);
+      }
+      layers.forEach(l => spacesLayer.removeLayer(l));
+      polyLayers.delete(polyIndex);
+      polyResults.delete(polyIndex);
+    }
+
+    function renderBlocks(result, polyIndex) {
       const { blocks, rad, cLat, cLng, f } = result;
+      const layers = [];
 
       for (const { ox, oy, ncols, nrows } of blocks) {
         // Individual spaces
@@ -731,24 +767,79 @@
           for (let col = 0; col < ncols; col++) {
             const corners = spaceCorners(ox, oy, col, row, rad);
             const latLngs = corners.map(c => toGeo(c.x, c.y, cLat, cLng, f));
-            L.polygon(latLngs, {
+            const spaceLayer = L.polygon(latLngs, {
               color: '#16a34a',
               fillColor: '#4ade80',
               fillOpacity: 0.75,
               weight: 1
             }).addTo(spacesLayer);
+            spaceLayer._polyIndex = polyIndex;
+            spaceLayer.on('click', e => { L.DomEvent.stopPropagation(e); toggleSpace(spaceLayer); });
+            layers.push(spaceLayer);
           }
         }
-        // Block outline
+        // Block outline (not selectable)
         const corners = blockCorners(ox, oy, ncols * SPACE_W, nrows * SPACE_H, rad);
         const latLngs = corners.map(c => toGeo(c.x, c.y, cLat, cLng, f));
-        L.polygon(latLngs, {
+        layers.push(L.polygon(latLngs, {
           color: '#fbbf24',
           fillOpacity: 0,
           weight: 2,
-          dashArray: '6 4'
-        }).addTo(spacesLayer);
+          dashArray: '6 4',
+          interactive: false
+        }).addTo(spacesLayer));
       }
+
+      polyLayers.set(polyIndex, layers);
+      polyResults.set(polyIndex, { blocks, spaces: totalSpacesOf(blocks) });
+    }
+
+    // ── Selection helpers ─────────────────────────────────────────────────────
+    function toggleSpace(layer) {
+      if (selectedSpaces.has(layer)) {
+        selectedSpaces.delete(layer);
+        layer.setStyle({ fillColor: '#4ade80', color: '#16a34a', fillOpacity: 0.75 });
+      } else {
+        selectedSpaces.add(layer);
+        layer.setStyle({ fillColor: '#93c5fd', color: '#3b82f6', fillOpacity: 0.9 });
+      }
+      updateSelectionDisplay();
+    }
+
+    function clearSelectionState() {
+      for (const layer of selectedSpaces) {
+        if (spacesLayer.hasLayer(layer))
+          layer.setStyle({ fillColor: '#4ade80', color: '#16a34a', fillOpacity: 0.75 });
+      }
+      selectedSpaces.clear();
+    }
+
+    function clearSelection() {
+      clearSelectionState();
+      updateSelectionDisplay();
+    }
+
+    function updateSelectionDisplay() {
+      const count = selectedSpaces.size;
+      const el = document.getElementById('selectedCount');
+      el.textContent = count > 0 ? count.toLocaleString('nl-NL') : '—';
+      el.className = 'stat-card-value' + (count > 0 ? '' : ' neutral');
+      document.getElementById('selectionActions').style.display = count > 0 ? 'block' : 'none';
+    }
+
+    // Returns a Set of polygon indices that have selected spaces, or null (= all)
+    function getTargetPolyIndices() {
+      if (selectedSpaces.size === 0) return null;
+      return new Set([...selectedSpaces].map(l => l._polyIndex));
+    }
+
+    function getTotalStats() {
+      let totalBlocks = 0, totalSpaces = 0;
+      for (const { blocks, spaces } of polyResults.values()) {
+        totalBlocks += blocks.length;
+        totalSpaces += spaces;
+      }
+      return { totalBlocks, totalSpaces };
     }
 
     // ── UI actions ────────────────────────────────────────────────────────────
@@ -762,14 +853,22 @@
 
       const straight = document.getElementById('straightPaths').checked;
       const placer = straight ? runPlacementStraight : runPlacement;
+      const targetIndices = getTargetPolyIndices();
 
-      // Small timeout so the status bar renders before heavy computation
       setTimeout(() => {
-        const results = drawnPolygons.map(poly => placer(poly, angleDeg, offX, offY));
-        renderAllBlocks(results);
+        if (targetIndices) {
+          // Partial update — only re-run polygons with selected spaces
+          clearSelection();
+          for (const i of targetIndices) {
+            clearPolyLayers(i);
+            renderBlocks(placer(drawnPolygons[i], angleDeg, offX, offY), i);
+          }
+        } else {
+          const results = drawnPolygons.map((poly, i) => placer(poly, angleDeg, offX, offY));
+          renderAllBlocks(results);
+        }
 
-        const count  = results.reduce((s, r) => s + r.blocks.length, 0);
-        const spaces = results.reduce((s, r) => s + totalSpacesOf(r.blocks), 0);
+        const { totalBlocks: count, totalSpaces: spaces } = getTotalStats();
         document.getElementById('totalSpaces').textContent = spaces.toLocaleString('nl-NL');
         document.getElementById('totalBlocks').textContent = count;
         document.getElementById('bestRot').textContent = angleDeg + '°';
@@ -777,9 +876,10 @@
 
         if (!silent) {
           const modeLabel = straight ? ' (straight paths)' : '';
+          const scopeLabel = targetIndices ? ` · ${targetIndices.size} area${targetIndices.size !== 1 ? 's' : ''}` : '';
           setStatus(
             spaces > 0
-              ? `${count} group${count !== 1 ? 's' : ''} placed → ${spaces} camping spaces${modeLabel}.`
+              ? `${count} group${count !== 1 ? 's' : ''} placed → ${spaces} camping spaces${modeLabel}${scopeLabel}.`
               : 'Nothing fits yet. Try a larger area or different rotation.',
             spaces > 0 ? 'ok' : ''
           );
@@ -789,6 +889,11 @@
 
     function optimize() {
       if (drawnPolygons.length === 0) return;
+      const targetIndices = getTargetPolyIndices();
+      const targetPolys = targetIndices
+        ? [...targetIndices].map(i => drawnPolygons[i])
+        : drawnPolygons;
+
       setStatus('Optimizing rotation & offset…', 'busy');
 
       const straight = document.getElementById('straightPaths').checked;
@@ -804,7 +909,7 @@
           for (const ox of offsetStepsX) {
             for (const oy of offsetStepsY) {
               let spaces = 0;
-              for (const poly of drawnPolygons) {
+              for (const poly of targetPolys) {
                 spaces += totalSpacesOf(placer(poly, a, ox, oy).blocks);
               }
               if (spaces > best.spaces) {
@@ -814,25 +919,31 @@
           }
         }
 
-        // Apply best settings
         document.getElementById('rotation').value = best.angleDeg;
         document.getElementById('offsetX').value  = best.offX;
         document.getElementById('offsetY').value  = best.offY;
 
-        const results = drawnPolygons.map(poly => placer(poly, best.angleDeg, best.offX, best.offY));
-        renderAllBlocks(results);
+        if (targetIndices) {
+          clearSelection();
+          for (const i of targetIndices) {
+            clearPolyLayers(i);
+            renderBlocks(placer(drawnPolygons[i], best.angleDeg, best.offX, best.offY), i);
+          }
+        } else {
+          renderAllBlocks(drawnPolygons.map(poly => placer(poly, best.angleDeg, best.offX, best.offY)));
+        }
 
-        const count  = results.reduce((s, r) => s + r.blocks.length, 0);
-        const spaces = results.reduce((s, r) => s + totalSpacesOf(r.blocks), 0);
+        const { totalBlocks: count, totalSpaces: spaces } = getTotalStats();
         document.getElementById('totalSpaces').textContent = spaces.toLocaleString('nl-NL');
         document.getElementById('totalBlocks').textContent = count;
         document.getElementById('bestRot').textContent = best.angleDeg + '°';
         document.getElementById('optimal-badge').style.display = 'inline';
 
         const modeLabel = straight ? ' · straight paths' : '';
+        const scopeLabel = targetIndices ? ` · ${targetIndices.size} area${targetIndices.size !== 1 ? 's' : ''}` : '';
         setStatus(
           spaces > 0
-            ? `Optimal: ${count} groups (${spaces} spaces) at ${best.angleDeg}°${modeLabel}.`
+            ? `Optimal: ${count} groups (${spaces} spaces) at ${best.angleDeg}°${modeLabel}${scopeLabel}.`
             : 'Nothing fits. Try a larger polygon.',
           spaces > 0 ? 'ok' : ''
         );
@@ -841,12 +952,13 @@
 
     function clearAll() {
       drawnItems.clearLayers();
-      spacesLayer.clearLayers();
+      resetSpatialState();
       drawnPolygons = [];
       document.getElementById('calcBtn').disabled = true;
       document.getElementById('optBtn').disabled = true;
       document.getElementById('totalArea').textContent = '—';
       clearResults();
+      updateSelectionDisplay();
       setStatus('Draw a polygon to get started.', '');
     }
 
@@ -858,6 +970,9 @@
       document.getElementById('totalSpaces').className = 'stat-card-value neutral';
       document.getElementById('totalBlocks').className = 'stat-card-value neutral';
     }
+
+    // Clear selection when clicking empty map area
+    map.on('click', () => { if (selectedSpaces.size > 0) clearSelection(); });
 
     function setStatus(msg, type) {
       const bar = document.getElementById('status-bar');
