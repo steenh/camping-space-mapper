@@ -594,16 +594,22 @@
           <input type="number" id="pPathW" value="5" min="1" max="20" step="0.5" />
         </div>
         <div class="modal-field">
+          <label>Space gap (m)</label>
+          <input type="number" id="pSpaceGap" value="0" min="0" max="10" step="0.5" />
+        </div>
+      </div>
+      <div class="modal-field-row">
+        <div class="modal-field">
           <label>Space shape</label>
           <select id="pShape" style="width:100%;padding:7px 10px;border-radius:5px;border:1px solid #475569;background:#0f172a;color:#f1f5f9;font-size:0.85rem;">
             <option value="rect">Rectangle</option>
             <option value="circle">Circle</option>
           </select>
         </div>
-      </div>
-      <div class="modal-field">
-        <label>Color</label>
-        <input type="color" id="pColor" value="#4ade80" />
+        <div class="modal-field">
+          <label>Color</label>
+          <input type="color" id="pColor" value="#4ade80" />
+        </div>
       </div>
       <div class="btn-row" style="margin-top:16px;">
         <button class="btn btn-primary" onclick="saveProduct()">Save</button>
@@ -628,7 +634,7 @@
     // ── Product types ─────────────────────────────────────────────────────────
     let nextProductId = 2;
     const products = [
-      { id: 1, name: 'Get a Place', spaceW: 5, spaceH: 10, maxCols: 10, maxRows: 2, pathW: 5, color: '#4ade80', shape: 'rect' }
+      { id: 1, name: 'Get a Place', spaceW: 5, spaceH: 10, maxCols: 10, maxRows: 2, pathW: 5, spaceGap: 0, color: '#4ade80', shape: 'rect' }
     ];
     const polygonProducts = new Map(); // polyIndex → productId
 
@@ -821,9 +827,10 @@
       ];
     }
 
-    function spaceCorners(ox, oy, col, row, rad, sw, sh) {
+    function spaceCorners(ox, oy, col, row, rad, sw, sh, stepW, stepH) {
+      stepW = stepW || sw; stepH = stepH || sh;
       const cos = Math.cos(rad), sin = Math.sin(rad);
-      const lx = col * sw, ly = row * sh;
+      const lx = col * stepW, ly = row * stepH;
       return [
         { x: ox + lx * cos - ly * sin,              y: oy + lx * sin + ly * cos },
         { x: ox + (lx + sw) * cos - ly * sin,        y: oy + (lx + sw) * sin + ly * cos },
@@ -832,9 +839,10 @@
       ];
     }
 
-    function spaceCenter(ox, oy, col, row, rad, sw, sh) {
+    function spaceCenter(ox, oy, col, row, rad, sw, sh, stepW, stepH) {
+      stepW = stepW || sw; stepH = stepH || sh;
       const cos = Math.cos(rad), sin = Math.sin(rad);
-      const lx = (col + 0.5) * sw, ly = (row + 0.5) * sh;
+      const lx = col * stepW + sw / 2, ly = row * stepH + sh / 2;
       return { x: ox + lx * cos - ly * sin, y: oy + lx * sin + ly * cos };
     }
 
@@ -903,6 +911,9 @@
     // The Y step after each row equals the tallest block placed + 5 m path.
     function runPlacement(polygon, angleDeg, offX, offY, product) {
       const { spaceW, spaceH, maxCols, maxRows, pathW } = product;
+      const spaceGap = product.spaceGap || 0;
+      const stepW = spaceW + spaceGap;
+      const stepH = spaceH + spaceGap;
       const geo = polygon.toGeoJSON();
       const cent = turf.centroid(geo).geometry.coordinates;
       const cLng = cent[0], cLat = cent[1];
@@ -945,12 +956,12 @@
 
           let placed = false;
           outer: for (let nrows = maxRows; nrows >= 1; nrows--) {
-            const h = nrows * spaceH;
+            const h = nrows * stepH - spaceGap;
             for (let ncols = maxCols; ncols >= 1; ncols--) {
-              const bCorners = blockCorners(ox, oy, ncols * spaceW, h, rad);
+              const bCorners = blockCorners(ox, oy, ncols * stepW - spaceGap, h, rad);
               if (isBlockInside(bCorners, polyLocal) && !blockOverlapsExclusions(bCorners, exclusionLocals)) {
                 blocks.push({ ox, oy, ncols, nrows });
-                xDist += ncols * spaceW + pathW;
+                xDist += ncols * stepW - spaceGap + pathW;
                 if (h > rowMaxH) rowMaxH = h;
                 placed = true;
                 break outer;
@@ -958,10 +969,10 @@
             }
           }
 
-          if (!placed) xDist += spaceW;
+          if (!placed) xDist += stepW;
         }
 
-        rowDist += rowMaxH > 0 ? rowMaxH + pathW : spaceH;
+        rowDist += rowMaxH > 0 ? rowMaxH + pathW : stepH;
       }
 
       return { blocks, rad, cLat, cLng, f };
@@ -977,7 +988,10 @@
     // narrower columns tighter and naturally adapts to irregular polygon shapes.
     function runPlacementStraight(polygon, angleDeg, offX, offY, product) {
       const { spaceW, spaceH, maxCols, maxRows, pathW } = product;
-      const blockH = maxRows * spaceH;
+      const spaceGap = product.spaceGap || 0;
+      const stepW = spaceW + spaceGap;
+      const stepH = spaceH + spaceGap;
+      const blockH = maxRows * stepH - spaceGap;
       const stepY  = blockH + pathW;
       const geo = polygon.toGeoJSON();
       const cent = turf.centroid(geo).geometry.coordinates;
@@ -1015,7 +1029,7 @@
       // ── Phase 1: build adaptive column slots ─────────────────────────────
       const colData = [];
       let xd = -diag / 2 + offX;
-      const maxSteps = Math.ceil(diag / spaceW) + 20;
+      const maxSteps = Math.ceil(diag / stepW) + 20;
       let steps = 0;
 
       while (xd < diag / 2 && steps++ < maxSteps) {
@@ -1023,11 +1037,11 @@
           const ox = base.x + xd * ux.x;
           const oy = base.y + xd * ux.y;
           for (let n = maxCols; n >= 1; n--) {
-            if (isBlockInside(blockCorners(ox, oy, n * spaceW, blockH, rad), polyLocal))
+            if (isBlockInside(blockCorners(ox, oy, n * stepW - spaceGap, blockH, rad), polyLocal))
               return { ncols: n, nrows: maxRows };
           }
           for (let n = maxCols; n >= 1; n--) {
-            if (isBlockInside(blockCorners(ox, oy, n * spaceW, spaceH, rad), polyLocal))
+            if (isBlockInside(blockCorners(ox, oy, n * stepW - spaceGap, stepH - spaceGap, rad), polyLocal))
               return { ncols: n, nrows: 1 };
           }
           return null;
@@ -1044,9 +1058,9 @@
 
         if (bestN > 0) {
           colData.push({ xDist: xd, bestN, capacity });
-          xd += bestN * spaceW + pathW;
+          xd += bestN * stepW - spaceGap + pathW;
         } else {
-          xd += spaceW;
+          xd += stepW;
         }
       }
 
@@ -1054,16 +1068,16 @@
       const blocks = [];
       for (const { xDist, bestN } of colData) {
         let rowDist = -diag / 2 + offY;
-        const maxRowSteps = Math.ceil(diag / spaceH) + 10;
+        const maxRowSteps = Math.ceil(diag / stepH) + 10;
         let rowSteps = 0;
         while (rowDist < diag / 2 && rowSteps++ < maxRowSteps) {
           const ox = cx + rowDist * uy.x + xDist * ux.x;
           const oy = cy + rowDist * uy.y + xDist * ux.y;
           let placed = false;
           outer: for (let nrows = maxRows; nrows >= 1; nrows--) {
-            const h = nrows * spaceH;
+            const h = nrows * stepH - spaceGap;
             for (let ncols = bestN; ncols >= 1; ncols--) {
-              const bCorners = blockCorners(ox, oy, ncols * spaceW, h, rad);
+              const bCorners = blockCorners(ox, oy, ncols * stepW - spaceGap, h, rad);
               if (isBlockInside(bCorners, polyLocal) && !blockOverlapsExclusions(bCorners, exclusionLocals)) {
                 blocks.push({ ox, oy, ncols, nrows });
                 rowDist += h + pathW;
@@ -1072,7 +1086,7 @@
               }
             }
           }
-          if (!placed) rowDist += spaceH;
+          if (!placed) rowDist += stepH;
         }
       }
 
@@ -1118,6 +1132,9 @@
     function renderBlocks(result, polyIndex, product) {
       const { blocks, rad, cLat, cLng, f } = result;
       const { spaceW, spaceH, color } = product;
+      const spaceGap = product.spaceGap || 0;
+      const stepW = spaceW + spaceGap;
+      const stepH = spaceH + spaceGap;
       const strokeColor = darkenHex(color);
       const layers = [];
 
@@ -1132,7 +1149,7 @@
           for (let col = 0; col < ncols; col++) {
             let spaceLayer;
             if (isCircle) {
-              const ctr = spaceCenter(ox, oy, col, row, rad, spaceW, spaceH);
+              const ctr = spaceCenter(ox, oy, col, row, rad, spaceW, spaceH, stepW, stepH);
               const [clat, clng] = toGeo(ctr.x, ctr.y, cLat, cLng, f);
               spaceLayer = L.circle([clat, clng], {
                 radius: circleRadius,
@@ -1142,7 +1159,7 @@
               const geo = turf.circle([clng, clat], circleRadius / 1000, { steps: 32 });
               spaceLayer._exportRing = geo.geometry.coordinates[0];
             } else {
-              const corners = spaceCorners(ox, oy, col, row, rad, spaceW, spaceH);
+              const corners = spaceCorners(ox, oy, col, row, rad, spaceW, spaceH, stepW, stepH);
               const latLngs = corners.map(c => toGeo(c.x, c.y, cLat, cLng, f));
               spaceLayer = L.polygon(latLngs, {
                 color: strokeColor, fillColor: color, fillOpacity: 0.75, weight: 1
@@ -1167,7 +1184,7 @@
         }
         // Block outline (not selectable) — skip for circle layouts
         if (!isCircle) {
-          const corners = blockCorners(ox, oy, ncols * spaceW, nrows * spaceH, rad);
+          const corners = blockCorners(ox, oy, ncols * stepW - spaceGap, nrows * stepH - spaceGap, rad);
           const latLngs = corners.map(c => toGeo(c.x, c.y, cLat, cLng, f));
           layers.push(L.polygon(latLngs, {
             color,
@@ -1595,7 +1612,8 @@
           // Grid-snapping: snap each centroid to the nearest grid cell using spaceW/H
           const cells = proj.map(p => ({
             col: Math.round(p.rx / spaceW),
-            row: Math.round(p.ry / spaceH)
+            row: Math.round(p.ry / spaceH),
+            rx: p.rx, ry: p.ry
           }));
           const cellMap = new Map(cells.map(c => [`${c.col},${c.row}`, c]));
 
@@ -1642,6 +1660,22 @@
           const allPathGaps = [...colGaps, ...rowGaps];
           const pathW = allPathGaps.length > 0 ? Math.max(0.5, round5(med(allPathGaps))) : 5;
 
+          // Space gap detection: measure actual c2c distances between adjacent features within components
+          const xIntraC2C = [], yIntraC2C = [];
+          for (const comp of components) {
+            const compMap = new Map(comp.map(c => [`${c.col},${c.row}`, c]));
+            for (const c of comp) {
+              const right = compMap.get(`${c.col + 1},${c.row}`);
+              if (right) xIntraC2C.push(right.rx - c.rx);
+              const below = compMap.get(`${c.col},${c.row + 1}`);
+              if (below) yIntraC2C.push(below.ry - c.ry);
+            }
+          }
+          const xGap = xIntraC2C.length > 0 ? Math.max(0, med(xIntraC2C) - spaceW) : 0;
+          const yGap = yIntraC2C.length > 0 ? Math.max(0, med(yIntraC2C) - spaceH) : 0;
+          const divisor = (xIntraC2C.length > 0 ? 1 : 0) + (yIntraC2C.length > 0 ? 1 : 0);
+          const spaceGap = round5(divisor > 0 ? (xGap + yGap) / divisor : 0);
+
           // Circularity detection: w/h ratio close to 1 → circle
           const rawW = med(proj.map(p => p.w)), rawH = med(proj.map(p => p.h));
           const ratio = rawW / rawH;
@@ -1649,15 +1683,16 @@
 
           // Pre-fill product modal with extracted parameters
           openProductModal();
-          document.getElementById('pSpaceW').value  = spaceW;
-          document.getElementById('pSpaceH').value  = spaceH;
-          document.getElementById('pPathW').value   = pathW;
-          document.getElementById('pMaxCols').value = maxCols;
-          document.getElementById('pMaxRows').value = maxRows;
-          document.getElementById('pShape').value   = shape;
+          document.getElementById('pSpaceW').value    = spaceW;
+          document.getElementById('pSpaceH').value    = spaceH;
+          document.getElementById('pPathW').value     = pathW;
+          document.getElementById('pSpaceGap').value  = spaceGap;
+          document.getElementById('pMaxCols').value   = maxCols;
+          document.getElementById('pMaxRows').value   = maxRows;
+          document.getElementById('pShape').value     = shape;
 
           setStatus(
-            `Analysed ${obbs.length} features → ${spaceW}×${spaceH} m ${shape}, path ${pathW} m, ${maxCols}×${maxRows} block. Suggested rotation: ${domAngleDeg}°.`,
+            `Analysed ${obbs.length} features → ${spaceW}×${spaceH} m ${shape}, gap ${spaceGap} m, path ${pathW} m, ${maxCols}×${maxRows} block. Suggested rotation: ${domAngleDeg}°.`,
             'info'
           );
         } catch (err) {
@@ -1718,7 +1753,7 @@
           <div class="product-swatch" style="background:${p.color};"></div>
           <div style="flex:1;min-width:0;">
             <div class="product-name">${p.name}</div>
-            <div class="product-specs">${p.spaceW}×${p.spaceH} m · ${p.shape === 'circle' ? 'circle' : 'rect'} · max ${p.maxCols}×${p.maxRows} · path ${p.pathW} m</div>
+            <div class="product-specs">${p.spaceW}×${p.spaceH} m · ${p.shape === 'circle' ? 'circle' : 'rect'} · max ${p.maxCols}×${p.maxRows} · path ${p.pathW} m${p.spaceGap > 0 ? ` · gap ${p.spaceGap} m` : ''}</div>
           </div>
           <button class="btn-xs btn-xs-secondary" onclick="openProductModal(${p.id})">Edit</button>
           ${products.length > 1 ? `<button class="btn-xs btn-xs-danger" onclick="deleteProduct(${p.id})">✕</button>` : ''}
@@ -1746,18 +1781,20 @@
         document.getElementById('pSpaceH').value  = p.spaceH;
         document.getElementById('pMaxCols').value = p.maxCols;
         document.getElementById('pMaxRows').value = p.maxRows;
-        document.getElementById('pPathW').value   = p.pathW;
-        document.getElementById('pShape').value   = p.shape || 'rect';
-        document.getElementById('pColor').value   = p.color;
+        document.getElementById('pPathW').value    = p.pathW;
+        document.getElementById('pSpaceGap').value = p.spaceGap || 0;
+        document.getElementById('pShape').value    = p.shape || 'rect';
+        document.getElementById('pColor').value    = p.color;
       } else {
-        document.getElementById('pName').value    = '';
-        document.getElementById('pSpaceW').value  = 5;
-        document.getElementById('pSpaceH').value  = 10;
-        document.getElementById('pMaxCols').value = 10;
-        document.getElementById('pMaxRows').value = 2;
-        document.getElementById('pPathW').value   = 5;
-        document.getElementById('pShape').value   = 'rect';
-        document.getElementById('pColor').value   = '#60a5fa';
+        document.getElementById('pName').value     = '';
+        document.getElementById('pSpaceW').value   = 5;
+        document.getElementById('pSpaceH').value   = 10;
+        document.getElementById('pMaxCols').value  = 10;
+        document.getElementById('pMaxRows').value  = 2;
+        document.getElementById('pPathW').value    = 5;
+        document.getElementById('pSpaceGap').value = 0;
+        document.getElementById('pShape').value    = 'rect';
+        document.getElementById('pColor').value    = '#60a5fa';
       }
       modal.classList.add('open');
     }
@@ -1773,15 +1810,16 @@
       const spaceH  = parseFloat(document.getElementById('pSpaceH').value)  || 10;
       const maxCols = parseInt(document.getElementById('pMaxCols').value)   || 10;
       const maxRows = parseInt(document.getElementById('pMaxRows').value)   || 2;
-      const pathW   = parseFloat(document.getElementById('pPathW').value)   || 5;
-      const shape   = document.getElementById('pShape').value || 'rect';
-      const color   = document.getElementById('pColor').value;
+      const pathW    = parseFloat(document.getElementById('pPathW').value)    || 5;
+      const spaceGap = parseFloat(document.getElementById('pSpaceGap').value) || 0;
+      const shape    = document.getElementById('pShape').value || 'rect';
+      const color    = document.getElementById('pColor').value;
 
       if (editingProductId) {
         const p = products.find(x => x.id === editingProductId);
-        Object.assign(p, { name, spaceW, spaceH, maxCols, maxRows, pathW, shape, color });
+        Object.assign(p, { name, spaceW, spaceH, maxCols, maxRows, pathW, spaceGap, shape, color });
       } else {
-        products.push({ id: nextProductId++, name, spaceW, spaceH, maxCols, maxRows, pathW, shape, color });
+        products.push({ id: nextProductId++, name, spaceW, spaceH, maxCols, maxRows, pathW, spaceGap, shape, color });
       }
       closeProductModal();
       renderProductsList();
