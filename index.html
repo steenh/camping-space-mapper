@@ -420,6 +420,7 @@
           <input type="number" id="arcMaxEdge" value="50" min="5" max="500" step="5" />
         </div>
         <button class="btn btn-primary" id="arcCreateBtn" onclick="createPolygonFromArcSelection()" disabled style="width:100%;">Create polygon from selection</button>
+        <button class="btn btn-secondary" id="arcAnalyseBtn" onclick="analyseArcSelection()" disabled style="width:100%;margin-top:6px;">Analyse as product type</button>
       </div>
     </div>
 
@@ -1482,14 +1483,135 @@
       setStatus(`Polygon created from ${geojsonFeatures.length} selected features. ${n} area${n !== 1 ? 's' : ''} total.`, 'info');
     }
 
+    function analyseArcSelection() {
+      if (selectedArcFeatures.size < 3) {
+        setStatus('Select at least 3 features to analyse.', '');
+        return;
+      }
+      setStatus('Analysing features…', 'busy');
+
+      setTimeout(() => {
+        try {
+          const rawFeatures = [...selectedArcFeatures].map(l => l.toGeoJSON());
+
+          // Flatten MultiPolygon → largest Polygon ring
+          const features = rawFeatures.map(f => {
+            if (f.geometry.type === 'MultiPolygon') {
+              const largest = f.geometry.coordinates.reduce((a, b) =>
+                turf.area(turf.polygon(a)) >= turf.area(turf.polygon(b)) ? a : b
+              );
+              return turf.polygon(largest, f.properties);
+            }
+            return f;
+          }).filter(f => f.geometry.type === 'Polygon' && f.geometry.coordinates[0].length >= 4);
+
+          if (features.length < 3) {
+            setStatus('Not enough valid polygon features to analyse.', '');
+            return;
+          }
+
+          // Global metric projection centred on selection
+          const collection = turf.featureCollection(features);
+          const [gLng, gLat] = turf.centroid(collection).geometry.coordinates;
+          const gf = getFactors(gLat);
+          const toM = (lng, lat) => ({ x: (lng - gLng) * gf.mPerLng, y: (lat - gLat) * gf.mPerLat });
+
+          // Minimum oriented bounding box for one feature
+          function minOBB(feature) {
+            const hull = turf.convex(turf.featureCollection([feature]));
+            const coords = hull ? hull.geometry.coordinates[0] : feature.geometry.coordinates[0];
+            const pts = coords.map(([lng, lat]) => toM(lng, lat));
+            let best = { area: Infinity, angle: 0, w: 1, h: 1 };
+            for (let i = 0; i < pts.length - 1; i++) {
+              const angle = Math.atan2(pts[i + 1].y - pts[i].y, pts[i + 1].x - pts[i].x);
+              const c = Math.cos(-angle), s = Math.sin(-angle);
+              let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+              for (const p of pts) {
+                const rx = p.x * c - p.y * s, ry = p.x * s + p.y * c;
+                if (rx < xMin) xMin = rx; if (rx > xMax) xMax = rx;
+                if (ry < yMin) yMin = ry; if (ry > yMax) yMax = ry;
+              }
+              const w = xMax - xMin, h = yMax - yMin, area = w * h;
+              if (area < best.area) best = { area, angle, w, h };
+            }
+            const centCoords = turf.centroid(feature).geometry.coordinates;
+            const cent = toM(centCoords[0], centCoords[1]);
+            return { ...best, cx: cent.x, cy: cent.y };
+          }
+
+          const obbs = features.map(minOBB).filter(Boolean);
+
+          // Dominant angle — normalise to [0, π/2) and take median
+          const normAngle = a => ((a % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2);
+          const angles = obbs.map(o => normAngle(o.angle)).sort((a, b) => a - b);
+          const domAngle = angles[Math.floor(angles.length / 2)];
+          const domAngleDeg = Math.round(domAngle * 180 / Math.PI);
+
+          // Project all OBB centroids to dominant-angle coordinate system
+          const cosD = Math.cos(-domAngle), sinD = Math.sin(-domAngle);
+          const proj = obbs.map(o => ({
+            rx: o.cx * cosD - o.cy * sinD,
+            ry: o.cx * sinD + o.cy * cosD,
+            w: o.w, h: o.h
+          }));
+
+          // Median helper
+          const med = arr => { const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+          const round5 = v => Math.round(v * 2) / 2;
+
+          // Space dimensions
+          const spaceW = Math.max(0.5, round5(med(proj.map(p => p.w))));
+          const spaceH = Math.max(0.5, round5(med(proj.map(p => p.h))));
+
+          // Gap analysis for path width and block structure
+          const byX = [...proj].sort((a, b) => a.rx - b.rx);
+          const byY = [...proj].sort((a, b) => a.ry - b.ry);
+          const xC2C = byX.slice(1).map((p, i) => p.rx - byX[i].rx);
+          const yC2C = byY.slice(1).map((p, i) => p.ry - byY[i].ry);
+
+          // Large gaps (c2c > 1.5× dimension) cross a path; subtract dimension to get path width
+          const largeX = xC2C.filter(g => g > spaceW * 1.5).map(g => g - spaceW);
+          const largeY = yC2C.filter(g => g > spaceH * 1.5).map(g => g - spaceH);
+          const allLarge = [...largeX, ...largeY];
+          const pathW = allLarge.length > 0 ? Math.max(0.5, round5(med(allLarge))) : 5;
+
+          // Max block dimensions: longest run of small consecutive gaps
+          let maxCols = 1, curCols = 1;
+          for (const g of xC2C) { if (g <= spaceW * 1.5) { curCols++; maxCols = Math.max(maxCols, curCols); } else curCols = 1; }
+          let maxRows = 1, curRows = 1;
+          for (const g of yC2C) { if (g <= spaceH * 1.5) { curRows++; maxRows = Math.max(maxRows, curRows); } else curRows = 1; }
+          maxCols = Math.min(maxCols, 20);
+          maxRows = Math.min(maxRows, 10);
+
+          // Pre-fill product modal with extracted parameters
+          openProductModal();
+          document.getElementById('pSpaceW').value  = spaceW;
+          document.getElementById('pSpaceH').value  = spaceH;
+          document.getElementById('pPathW').value   = pathW;
+          document.getElementById('pMaxCols').value = maxCols;
+          document.getElementById('pMaxRows').value = maxRows;
+
+          setStatus(
+            `Analysed ${obbs.length} features → ${spaceW}×${spaceH} m spaces, path ${pathW} m, ${maxCols}×${maxRows} block. Suggested rotation: ${domAngleDeg}°.`,
+            'info'
+          );
+        } catch (err) {
+          console.error('Analysis failed:', err);
+          setStatus('Analysis failed: ' + err.message, '');
+        }
+      }, 30);
+    }
+
     function updateArcUI() {
       const count    = selectedArcFeatures.size;
       const countEl  = document.getElementById('arcFeatureCount');
-      const createBtn = document.getElementById('arcCreateBtn');
-      const clearBtn  = document.getElementById('arcClearBtn');
-      if (countEl)    countEl.textContent   = count > 0 ? `${count} feature${count !== 1 ? 's' : ''} selected` : '';
-      if (createBtn)  createBtn.disabled    = count === 0;
-      if (clearBtn)   clearBtn.style.display = count > 0 ? '' : 'none';
+      const createBtn  = document.getElementById('arcCreateBtn');
+      const analyseBtn = document.getElementById('arcAnalyseBtn');
+      const clearBtn   = document.getElementById('arcClearBtn');
+      if (countEl)     countEl.textContent    = count > 0 ? `${count} feature${count !== 1 ? 's' : ''} selected` : '';
+      if (createBtn)   createBtn.disabled     = count === 0;
+      if (analyseBtn)  analyseBtn.disabled    = count === 0;
+      if (clearBtn)    clearBtn.style.display = count > 0 ? '' : 'none';
     }
 
     async function initArcGIS() {
