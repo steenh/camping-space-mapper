@@ -376,14 +376,18 @@
       </div>
       <div class="instruction-step">
         <div class="step-num">3</div>
-        <div class="step-text"><strong>Calculate</strong> places blocks at the current settings · <strong>Optimize</strong> finds the best rotation and offset automatically</div>
+        <div class="step-text"><strong>Draw exclusion zones</strong> (optional) — use the Exclusion Zones section to mark roads and obstacles where spaces won't be placed</div>
       </div>
       <div class="instruction-step">
         <div class="step-num">4</div>
-        <div class="step-text"><strong>Select spaces</strong> to re-run only part of the layout — <strong>click</strong> a space · <strong>double-click</strong> for the whole block · <strong>Select area</strong> to box-select · <strong>Select all</strong> for a full area</div>
+        <div class="step-text"><strong>Calculate</strong> places blocks at the current settings · <strong>Optimize</strong> finds the best rotation and offset automatically</div>
       </div>
       <div class="instruction-step">
         <div class="step-num">5</div>
+        <div class="step-text"><strong>Select spaces</strong> to re-run only part of the layout — <strong>click</strong> a space · <strong>double-click</strong> for the whole block · <strong>Select area</strong> to box-select · <strong>Select all</strong> for a full area</div>
+      </div>
+      <div class="instruction-step">
+        <div class="step-num">6</div>
         <div class="step-text"><strong>Export</strong> the result as GeoJSON or push directly to an ArcGIS feature layer via the Export / Sync section</div>
       </div>
     </div>
@@ -442,6 +446,13 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Exclusion Zones <span id="exclusionCount" style="color:#64748b;font-weight:400;text-transform:none;font-size:0.75rem;letter-spacing:0;"></span></div>
+      <p style="font-size:0.73rem;color:#94a3b8;margin-bottom:8px;">Mark roads and obstacles where no spaces will be placed.</p>
+      <button class="btn btn-secondary" id="exclusionDrawBtn" onclick="toggleExclusionDraw()" style="width:100%;margin-bottom:8px;">Draw exclusion zone</button>
+      <div id="exclusionList"></div>
     </div>
 
     <div class="section">
@@ -530,6 +541,10 @@
         Selected ArcGIS feature
       </div>
       <div class="legend-item" style="margin-top:6px;">
+        <div class="legend-swatch" style="background:rgba(239,68,68,0.25); border: 2px dashed #ef4444;"></div>
+        Exclusion zone
+      </div>
+      <div class="legend-item">
         <div class="legend-swatch" style="background:rgba(251,191,36,0.15); border: 2px solid #fbbf24;"></div>
         Drawn polygon
       </div>
@@ -642,6 +657,7 @@
       { maxZoom: 21, maxNativeZoom: 19, opacity: 0.7 }
     ).addTo(map);
 
+    const exclusionItems = new L.FeatureGroup().addTo(map);
     const drawnItems = new L.FeatureGroup().addTo(map);
     const spacesLayer = new L.FeatureGroup().addTo(map);
 
@@ -664,7 +680,8 @@
     });
     map.addControl(drawControl);
 
-    let drawnPolygons = [];
+    let drawnPolygons  = [];
+    let drawnExclusions = [];
 
     // Per-polygon layer and result tracking (for partial re-render on selection)
     const polyLayers  = new Map(); // polyIndex → Layer[]
@@ -672,7 +689,9 @@
     const selectedSpaces = new Set(); // selected space Layer references
 
     let selectionRectMode = false;
-    let rectDrawHandler = null;
+    let rectDrawHandler   = null;
+    let exclusionDrawMode    = false;
+    let exclusionDrawHandler = null;
 
     function updateAreaDisplay() {
       const total = drawnPolygons.reduce((s, p) => s + turf.area(p.toGeoJSON()), 0);
@@ -680,6 +699,20 @@
     }
 
     map.on(L.Draw.Event.CREATED, e => {
+      // Exclusion zone draw mode
+      if (exclusionDrawMode) {
+        exclusionDrawMode = false;
+        exclusionDrawHandler = null;
+        document.getElementById('exclusionDrawBtn').classList.remove('btn-select-active');
+        map.getContainer().style.cursor = '';
+        const lyr = e.layer;
+        lyr.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.25, weight: 2, dashArray: '5 4' });
+        drawnExclusions.push(lyr);
+        exclusionItems.addLayer(lyr);
+        updateExclusionsList();
+        setStatus(`Exclusion zone ${drawnExclusions.length} added. Recalculate to apply.`, 'info');
+        return;
+      }
       // Feature polygon select mode — select ArcGIS features inside drawn polygon
       if (featurePolyMode) {
         featurePolyMode = false;
@@ -825,6 +858,24 @@
       return true;
     }
 
+    function polygonsOverlap(polyA, polyB) {
+      for (const c of polyA) { if (pointInPoly(c.x, c.y, polyB)) return true; }
+      for (const c of polyB) { if (pointInPoly(c.x, c.y, polyA)) return true; }
+      for (let i = 0; i < polyA.length; i++) {
+        const a1 = polyA[i], a2 = polyA[(i + 1) % polyA.length];
+        for (let j = 0; j < polyB.length; j++) {
+          const b1 = polyB[j], b2 = polyB[(j + 1) % polyB.length];
+          if (segmentsIntersect(a1.x, a1.y, a2.x, a2.y, b1.x, b1.y, b2.x, b2.y)) return true;
+        }
+      }
+      return false;
+    }
+
+    function blockOverlapsExclusions(corners, exclusions) {
+      for (const excl of exclusions) { if (polygonsOverlap(corners, excl)) return true; }
+      return false;
+    }
+
     // ── Core placement algorithm ──────────────────────────────────────────────
     // Row-by-row greedy sweep. At each position tries (nrows=2, ncols=10→1)
     // then (nrows=1, ncols=10→1) so 2-row groups are always preferred but
@@ -839,6 +890,11 @@
 
       const rawCoords = geo.geometry.coordinates[0];
       const polyLocal = rawCoords.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
+
+      const exclusionLocals = drawnExclusions.map(exclLayer => {
+        const ec = exclLayer.toGeoJSON().geometry.coordinates[0];
+        return ec.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
+      });
 
       const xs = polyLocal.map(c => c.x), ys = polyLocal.map(c => c.y);
       const minX = Math.min(...xs), maxX = Math.max(...xs);
@@ -871,7 +927,8 @@
           outer: for (let nrows = maxRows; nrows >= 1; nrows--) {
             const h = nrows * spaceH;
             for (let ncols = maxCols; ncols >= 1; ncols--) {
-              if (isBlockInside(blockCorners(ox, oy, ncols * spaceW, h, rad), polyLocal)) {
+              const bCorners = blockCorners(ox, oy, ncols * spaceW, h, rad);
+              if (isBlockInside(bCorners, polyLocal) && !blockOverlapsExclusions(bCorners, exclusionLocals)) {
                 blocks.push({ ox, oy, ncols, nrows });
                 xDist += ncols * spaceW + pathW;
                 if (h > rowMaxH) rowMaxH = h;
@@ -909,6 +966,11 @@
 
       const rawCoords = geo.geometry.coordinates[0];
       const polyLocal = rawCoords.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
+
+      const exclusionLocals = drawnExclusions.map(exclLayer => {
+        const ec = exclLayer.toGeoJSON().geometry.coordinates[0];
+        return ec.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
+      });
 
       const xs = polyLocal.map(c => c.x), ys = polyLocal.map(c => c.y);
       const minX = Math.min(...xs), maxX = Math.max(...xs);
@@ -981,7 +1043,8 @@
           outer: for (let nrows = maxRows; nrows >= 1; nrows--) {
             const h = nrows * spaceH;
             for (let ncols = bestN; ncols >= 1; ncols--) {
-              if (isBlockInside(blockCorners(ox, oy, ncols * spaceW, h, rad), polyLocal)) {
+              const bCorners = blockCorners(ox, oy, ncols * spaceW, h, rad);
+              if (isBlockInside(bCorners, polyLocal) && !blockOverlapsExclusions(bCorners, exclusionLocals)) {
                 blocks.push({ ox, oy, ncols, nrows });
                 rowDist += h + pathW;
                 placed = true;
@@ -1173,6 +1236,48 @@
         shapeOptions: { color: '#3b82f6', weight: 2, fillOpacity: 0.1, fillColor: '#3b82f6', dashArray: '4 4' }
       });
       rectDrawHandler.enable();
+    }
+
+    // ── Exclusion zones ───────────────────────────────────────────────────────
+    function toggleExclusionDraw() {
+      if (exclusionDrawMode) {
+        exclusionDrawMode = false;
+        if (exclusionDrawHandler) { exclusionDrawHandler.disable(); exclusionDrawHandler = null; }
+        document.getElementById('exclusionDrawBtn').classList.remove('btn-select-active');
+        map.getContainer().style.cursor = '';
+        return;
+      }
+      exclusionDrawMode = true;
+      document.getElementById('exclusionDrawBtn').classList.add('btn-select-active');
+      map.getContainer().style.cursor = 'crosshair';
+      exclusionDrawHandler = new L.Draw.Polygon(map, {
+        allowIntersection: false,
+        shapeOptions: { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.15, weight: 2, dashArray: '5 4' }
+      });
+      exclusionDrawHandler.enable();
+    }
+
+    function deleteExclusion(index) {
+      exclusionItems.removeLayer(drawnExclusions[index]);
+      drawnExclusions.splice(index, 1);
+      updateExclusionsList();
+      if (polyResults.size > 0) setStatus('Exclusion zone removed. Recalculate to apply.', 'info');
+    }
+
+    function updateExclusionsList() {
+      const countEl = document.getElementById('exclusionCount');
+      const list    = document.getElementById('exclusionList');
+      if (countEl) countEl.textContent = drawnExclusions.length > 0 ? `(${drawnExclusions.length})` : '';
+      if (!list) return;
+      list.innerHTML = drawnExclusions.map((layer, i) => {
+        const area = Math.round(turf.area(layer.toGeoJSON())).toLocaleString('nl-NL');
+        return `<div class="area-entry">
+          <div class="area-entry-top">
+            <span class="area-label">Zone ${i + 1} <small>(${area} m²)</small></span>
+            <button class="btn-xs btn-xs-danger" onclick="deleteExclusion(${i})">Remove</button>
+          </div>
+        </div>`;
+      }).join('');
     }
 
     // ── ArcGIS OAuth (PKCE) ───────────────────────────────────────────────────
@@ -1761,6 +1866,15 @@
         document.getElementById('rectSelectBtn').classList.remove('btn-select-active');
         map.getContainer().style.cursor = '';
       }
+      if (exclusionDrawMode) {
+        exclusionDrawMode = false;
+        if (exclusionDrawHandler) { exclusionDrawHandler.disable(); exclusionDrawHandler = null; }
+        document.getElementById('exclusionDrawBtn').classList.remove('btn-select-active');
+        map.getContainer().style.cursor = '';
+      }
+      exclusionItems.clearLayers();
+      drawnExclusions = [];
+      updateExclusionsList();
       drawnItems.clearLayers();
       resetSpatialState();
       drawnPolygons = [];
