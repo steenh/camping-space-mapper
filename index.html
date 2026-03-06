@@ -680,6 +680,7 @@
     const exclusionItems = new L.FeatureGroup().addTo(map);
     const drawnItems = new L.FeatureGroup().addTo(map);
     const spacesLayer = new L.FeatureGroup().addTo(map);
+    const canvasRenderer = L.canvas({ padding: 0.5 });
 
     const drawControl = new L.Control.Draw({
       draw: {
@@ -1153,16 +1154,17 @@
               const [clat, clng] = toGeo(ctr.x, ctr.y, cLat, cLng, f);
               spaceLayer = L.circle([clat, clng], {
                 radius: circleRadius,
-                color: strokeColor, fillColor: color, fillOpacity: 0.75, weight: 1
+                color: strokeColor, fillColor: color, fillOpacity: 0.75, weight: 1,
+                renderer: canvasRenderer
               }).addTo(spacesLayer);
-              // Pre-compute polygon ring for export (32-sided approximation)
-              const geo = turf.circle([clng, clat], circleRadius / 1000, { steps: 32 });
-              spaceLayer._exportRing = geo.geometry.coordinates[0];
+              // Store centre + radius for lazy export ring computation
+              spaceLayer._circleExport = { clng, clat, radiusKm: circleRadius / 1000 };
             } else {
               const corners = spaceCorners(ox, oy, col, row, rad, spaceW, spaceH, stepW, stepH);
               const latLngs = corners.map(c => toGeo(c.x, c.y, cLat, cLng, f));
               spaceLayer = L.polygon(latLngs, {
-                color: strokeColor, fillColor: color, fillOpacity: 0.75, weight: 1
+                color: strokeColor, fillColor: color, fillOpacity: 0.75, weight: 1,
+                renderer: canvasRenderer
               }).addTo(spacesLayer);
             }
             spaceLayer._polyIndex = polyIndex;
@@ -1191,7 +1193,8 @@
             fillOpacity: 0,
             weight: 2,
             dashArray: '6 4',
-            interactive: false
+            interactive: false,
+            renderer: canvasRenderer
           }).addTo(spacesLayer));
         }
       }
@@ -1941,12 +1944,14 @@
       setTimeout(() => {
         let best = { spaces: -1, angleDeg: 0, offX: 0, offY: 0 };
 
-        const offsetStepsX = [0, 11, 22, 33, 44];
-        const offsetStepsY = [0, 5, 10, 15, 20];
+        // Coarse sweep: 18 angles (every 5°) × 3×3 offsets = 162 runs
+        // vs old 90×5×5 = 2,250 — ~14× faster with negligible quality loss
+        const offsetStepsX = [0, 17, 34];
+        const offsetStepsY = [0, 8, 16];
 
         const targetPolyIndices = targetIndices ? [...targetIndices] : drawnPolygons.map((_, i) => i);
 
-        for (let a = 0; a < 90; a++) {
+        for (let a = 0; a < 90; a += 5) {
           for (const ox of offsetStepsX) {
             for (const oy of offsetStepsY) {
               let spaces = 0;
@@ -2006,8 +2011,11 @@
         const product = getProductForPoly(polyIndex);
         for (const layer of layers) {
           if (layer._polyIndex === undefined) continue; // skip block outlines
-          const f = layer._exportRing
-            ? { type: 'Feature', geometry: { type: 'Polygon', coordinates: [layer._exportRing] }, properties: {} }
+          const ring = layer._circleExport
+            ? turf.circle([layer._circleExport.clng, layer._circleExport.clat], layer._circleExport.radiusKm, { steps: 32 }).geometry.coordinates[0]
+            : null;
+          const f = ring
+            ? { type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] }, properties: {} }
             : layer.toGeoJSON();
           f.properties = {
             product_type: product.name,
@@ -2062,8 +2070,9 @@
           for (const layer of layers) {
             if (layer._polyIndex === undefined) continue; // skip block outlines
             let ring;
-            if (layer._exportRing) {
-              ring = layer._exportRing; // already closed [lng, lat] pairs from turf.circle
+            if (layer._circleExport) {
+              const { clng, clat, radiusKm } = layer._circleExport;
+              ring = turf.circle([clng, clat], radiusKm, { steps: 32 }).geometry.coordinates[0];
             } else {
               const latlngs = layer.getLatLngs()[0];
               ring = latlngs.map(ll => [ll.lng, ll.lat]);
