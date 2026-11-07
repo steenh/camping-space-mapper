@@ -3,7 +3,7 @@
   "private": true,
   "description": "Camping Space Mapper — dev tooling only (tests and benchmarks). The app itself has no build step.",
   "scripts": {
-    "test": "node --test tests/",
+    "test": "node --test \"tests/**/*.test.mjs\"",
     "bench": "node bench/run-bench.mjs",
     "bench:discovery": "node bench/discovery-compare.mjs"
   },
