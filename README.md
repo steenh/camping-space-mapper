@@ -17,7 +17,7 @@ A browser-based tool for planning and optimising camping space layouts on satell
   - OAuth 2.0 Authorization Code + PKCE login (no client secret in source)
   - Load restricted feature layers onto the map (click, box, or polygon select)
   - Create area polygons from selected features using a concave hull
-  - ~~Push the final layout to an ArcGIS hosted feature layer~~ — **disabled** (`ENABLE_ARCGIS_PUSH = false`): it deleted every feature in the target layer before writing. It returns only through a validated, approved and reversible publishing flow (see `DECISION-LOG.md`, B1)
+  - **Read-only:** the app never writes to ArcGIS (`DECISION-LOG.md`, A9). There is no push, no write proxy, and a browser-side guard refuses every ArcGIS edit operation. The layer panel tells an empty layer, an authorization error and a loading error apart
 - **GeoJSON export** — download the full layout with `product_type`, `area_index`, and `block_key` attributes
 
 ## Tech stack
@@ -33,18 +33,16 @@ All loaded from CDN at exact versions with Subresource Integrity (`integrity="sh
 
 ## Deployment
 
-The app is a single `index.html` file deployed via **Cloudflare Pages** with two serverless proxy functions in `functions/`:
+The app is a single `index.html` file deployed via **Cloudflare Pages** with one serverless function in `functions/` (there is no write proxy: the app only reads from ArcGIS):
 
 | Function | Path | Purpose |
 |---|---|---|
 | `arc-token.js` | `/arc-token` | Proxies the ArcGIS OAuth token exchange (the portal's token endpoint has no CORS). Forwards only the app's own PKCE authorization-code exchange: same origin, allowed public client IDs, redirect URI on an allowed origin |
-| `arc-proxy.js` | `/arc-proxy` | **Closed by default.** When `ARC_PROXY_ENABLED=true`, forwards only same-origin POSTs to `https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0/{addFeatures,deleteFeatures,applyEdits}` |
 
-Both functions are Cloudflare Pages Functions (ES module format) and send no CORS headers (same-origin use only).
+It is a Cloudflare Pages Function (ES module format) that only ever calls the portal's token endpoint and sends no CORS headers (same-origin use only).
 
 | Environment variable | Default | Purpose |
 |---|---|---|
-| `ARC_PROXY_ENABLED` | unset (closed) | Set to `true` to open `/arc-proxy`. Leave unset while push is disabled |
 | `ALLOWED_ORIGINS` | — | Extra allowed origins, comma-separated (the site's own origin is always allowed) |
 | `ARCGIS_CLIENT_IDS` | built-in list | Public OAuth client IDs accepted by `/arc-token`, comma-separated |
 
@@ -72,7 +70,7 @@ const ARCGIS_PORTAL_URL = 'https://your-portal.example.com/portal';
 const ARCGIS_LAYER_URL  = 'https://your-server.example.com/arcgis/rest/services/.../FeatureServer/N';
 ```
 
-The (disabled) push target is a dropdown in the Export / Sync section; the proxy only allows the `Space_mapping` layer.
+There is no write target: results leave the app only as a GeoJSON download.
 
 ## How to use
 
