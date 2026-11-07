@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test \"tests/**/*.test.mjs\"",
     "bench": "node bench/run-bench.mjs",
-    "bench:discovery": "node bench/discovery-compare.mjs"
+    "bench:discovery": "node bench/discovery-compare.mjs",
+    "bench:browser": "node bench/browser/serve.mjs 8790"
   },
   "devDependencies": {
     "@turf/turf": "6.5.0",

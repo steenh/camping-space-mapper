@@ -104,3 +104,11 @@ Beslutningstager: Steen Ritter. Grundlag: [Release-gate](RELEASE-GATE-PROD.md) F
 |---|---|---|---|
 | G0-a/c | Merge `fase0/sikring` til `origin/master` og dermed produktionsdeploy via Cloudflares Git-integration (vej A) | **GO** | F3 (ingen O1+O2, ingen uventede ændringer) og F4 (alle tests inkl. SRI grønne på merge-commit) kontrolleres før push; verifikation efter deploy kun med læsning; ingen ArcGIS-skrivning (A9) |
 
+## 2026-11-07 — G0B: merge og produktionsdeploy af O1+O2 (Web Worker)
+
+Beslutningstager: Steen Ritter. Grundlag: [Fase 0B-rapport](FASE-0B-RAPPORT.md) (0B.1–0B.3 opfyldt; Chrome-måling i synlig fane).
+
+| ID | Beslutning | Status | Betingelser |
+|---|---|---|---|
+| G0B | Merge `fase0b/worker` (O1+O2 + Web Worker) til `origin/master` og dermed produktionsdeploy (samlet beslutning, fordi produktionen er Git-koblet) | **GO** | Samme release-gate som fase 0: ingen uventede ændringer, read-only (A9) uændret, alle tests inkl. SRI grønne, benchmark byte-identisk; verifikation efter deploy kun med læsning. Oprydning af det gamle client-ID er **ikke** med |
+

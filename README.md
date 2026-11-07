@@ -91,11 +91,14 @@ npm test                 # all tests (golden regression, geometry probes, functi
 CSM_NETWORK=1 npm test   # also verifies the SRI hashes against the CDN files
 npm run bench            # benchmark of the current optimiser on synthetic zones -> bench/results/latest.*
 npm run bench:discovery  # slow: reproduces the search comparison from DISCOVERY-OPTIMIZATION.md
+node bench/compare-0b.mjs   # old vs per-zone Optimize; bench/results/fase0b-compare.json must stay byte-identical
+npm run bench:browser    # static server on 127.0.0.1:8790 for bench/browser/worker-bench.html (main thread vs Web Worker)
 ```
 
 - `bench/lib/extract.mjs` loads the pure geometry/placement code straight from `index.html` (from `// ── Coordinate helpers` to `// @bench-extract-end`), so tests run the app's own code.
 - `tests/golden.test.mjs` checks that simple polygons give exactly the same layouts as the baseline in `bench/baseline/` (generated from commit `859849b`). Regenerate the baseline only on purpose, with a recorded reason.
 - Fixtures are synthetic (`bench/lib/fixtures.mjs`). Do not commit real RF zone data.
+- Optimize runs in a Web Worker (fase 0B.4). `tests/worker.test.mjs` runs the real worker script (built by the app's `buildOptimizeWorkerSource`) in a Node worker thread and compares it with `optimizeZone` on the main thread. For browser timings open `http://127.0.0.1:8790/bench/browser/worker-bench.html?auto=1` in Chrome after `npm run bench:browser`; its fixtures are `bench/fixtures/worker-bench.json` (`node bench/make-worker-fixtures.mjs`).
 
 ## Planning documents
 

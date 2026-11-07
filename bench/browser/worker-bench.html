@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Optimize benchmark: main thread vs Web Worker (fase 0B.4)</title>
+  <!-- Same pinned Turf file and SRI hash as index.html. -->
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"
+          integrity="sha384-82q0nm29xZzIo5BMtDYnh2/NxeO6FoaK1S/0nF84w3cEsqbBfun3JdMyDVYWfVY5" crossorigin="anonymous"></script>
+  <style>
+    body { font: 14px system-ui, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; margin-top: 12px; }
+    td, th { border: 1px solid #ccc; padding: 4px 8px; text-align: right; }
+    td:first-child, th:first-child { text-align: left; }
+    pre { background: #f4f4f4; padding: 8px; max-height: 300px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>Optimize: main thread vs Web Worker</h1>
+  <p>Runs the app's own <code>optimizeZone</code> (engine region sliced from <code>/index.html</code>) on the
+    synthetic zones in <code>bench/fixtures/worker-bench.json</code>, (1) on the main thread and (2) in a Web
+    Worker built exactly like the app builds it (<code>buildOptimizeWorkerSource</code>, Turf fetched with SRI,
+    Blob URL, one worker per run). Keep this tab in the foreground while it runs.
+    Query: <code>?auto=1</code> runs at load; <code>?only=D_irregular</code> or <code>?only=GAP_5x10</code> filters cases.</p>
+  <button id="run">Run</button> <span id="status">idle</span>
+  <table id="table"><thead><tr>
+    <th>Case</th><th>Runs</th><th>Spaces</th>
+    <th>Main thread ms</th><th>Main: longest UI freeze ms</th>
+    <th>Worker ms (incl. start)</th><th>Worker: zone ms</th><th>Worker: longest UI freeze ms</th>
+    <th>Progress msgs</th><th>Identical</th>
+  </tr></thead><tbody></tbody></table>
+  <h3>JSON</h3>
+  <pre id="json"></pre>
+  <script>
+    const $ = id => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+
+    // Longest gap between animation frames while `work` runs: how long the page could not paint.
+    async function measureFreeze(work) {
+      let last = performance.now(), maxGap = 0, on = true;
+      const tick = t => { maxGap = Math.max(maxGap, t - last); last = t; if (on) requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+      await new Promise(r => setTimeout(r, 50));
+      last = performance.now();
+      const out = await work();
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      on = false;
+      return { out, freezeMs: Math.round(Math.max(maxGap, performance.now() - last)) };
+    }
+
+    async function setup() {
+      const html = await (await fetch('/index.html', { cache: 'no-store' })).text();
+      const appScript = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+      const start = appScript.indexOf('// ── Coordinate helpers'), end = appScript.indexOf('// @bench-extract-end');
+      const engine = new Function('turf', `let drawnExclusions = [];\n${appScript.slice(start, end)}\n` +
+        'return { optimizeZone, runPlacement, runPlacementStraight, buildOptimizeWorkerSource };')(turf);
+      const tag = document.querySelector('script[src*="/@turf/turf@"][integrity]');
+      const turfText = await (await fetch(tag.src, { integrity: tag.integrity, mode: 'cors', credentials: 'omit' })).text();
+      const workerSrc = engine.buildOptimizeWorkerSource(turfText, appScript);
+      const fixtures = await (await fetch('/bench/fixtures/worker-bench.json', { cache: 'no-store' })).json();
+      return { engine, workerSrc, fixtures };
+    }
+
+    // One worker per run, as in the app; resolves when the zone result arrives.
+    function workerRun(workerSrc, zone, product, placer) {
+      return new Promise((resolve, reject) => {
+        const t0 = performance.now();
+        const url = URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' }));
+        const w = new Worker(url);
+        let progress = 0, tPost;
+        w.onmessage = e => {
+          const m = e.data;
+          if (m.type === 'progress') progress++;
+          else if (m.type === 'zone') {
+            const t1 = performance.now();
+            w.terminate(); URL.revokeObjectURL(url);
+            resolve({ result: m.result, totalMs: Math.round(t1 - t0), zoneMs: Math.round(t1 - tPost), progress });
+          } else if (m.type === 'error') { w.terminate(); reject(new Error(m.message)); }
+        };
+        w.onerror = e => { w.terminate(); reject(new Error(e.message || 'worker error')); };
+        tPost = performance.now();
+        w.postMessage({ type: 'optimize', placer, exclusions: [], zones: [{ index: 0, feature: zone, product, overlaps: [] }] });
+      });
+    }
+
+    async function run() {
+      $('run').disabled = true;
+      $('status').textContent = 'loading…';
+      const { engine, workerSrc, fixtures } = await setup();
+      const only = params.get('only');
+      const rows = [];
+      for (const [zname, zone] of Object.entries(fixtures.zones)) for (const [pname, P] of Object.entries(fixtures.products)) for (const placer of ['greedy', 'straight']) {
+        const id = `${zname}|${pname}|${placer}`;
+        if (only && !id.includes(only)) continue;
+        $('status').textContent = `${id}: main thread…`;
+        await new Promise(r => setTimeout(r, 50));
+        const fn = placer === 'straight' ? engine.runPlacementStraight : engine.runPlacement;
+        const main = await measureFreeze(async () => {
+          const t0 = performance.now();
+          const result = engine.optimizeZone({ toGeoJSON: () => zone }, P, [], fn);
+          return { result, ms: Math.round(performance.now() - t0) };
+        });
+        $('status').textContent = `${id}: worker…`;
+        const wk = await measureFreeze(() => workerRun(workerSrc, zone, P, placer));
+        const identical = JSON.stringify(main.out.result) === JSON.stringify(wk.out.result);
+        const row = { case: id, runs: main.out.result.runs, spaces: main.out.result.spaces,
+          mainMs: main.out.ms, mainFreezeMs: main.freezeMs,
+          workerTotalMs: wk.out.totalMs, workerZoneMs: wk.out.zoneMs, workerFreezeMs: wk.freezeMs,
+          progressMessages: wk.out.progress, identical, main: main.out.result, worker: wk.out.result };
+        rows.push(row);
+        const tr = document.createElement('tr');
+        tr.innerHTML = [row.case, row.runs, row.spaces, row.mainMs, row.mainFreezeMs, row.workerTotalMs, row.workerZoneMs,
+          row.workerFreezeMs, row.progressMessages, identical ? 'yes' : 'NO'].map(v => `<td>${v}</td>`).join('');
+        $('table').tBodies[0].appendChild(tr);
+      }
+      const result = { userAgent: navigator.userAgent, hardwareConcurrency: navigator.hardwareConcurrency, date: new Date().toISOString(), rows };
+      $('json').textContent = JSON.stringify(result, null, 1);
+      $('status').textContent = rows.every(r => r.identical) ? 'done — all results identical' : 'done — RESULTS DIFFER';
+      window.benchResult = result;
+      $('run').disabled = false;
+    }
+
+    $('run').onclick = () => run().catch(err => { $('status').textContent = 'error: ' + err.message; window.benchResult = { error: err.message }; });
+    if (params.get('auto')) $('run').onclick();
+  </script>
+</body>
+</html>
