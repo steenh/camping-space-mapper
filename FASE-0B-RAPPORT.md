@@ -41,3 +41,56 @@ Restgab mod discovery-bedste (bred søgning med 3.780 layouts): fra 0 til −8 p
 ## 4. Anbefaling til port G0B
 
 Merge **ikke** 0B, før 0B.3 er løst. Foreslået næste skridt (0B.4): kør `optimizeZone` i en Web Worker (engine-regionen og Turf indlæses med SRI-verificeret `fetch`), og parallelisér zoner over `navigator.hardwareConcurrency`. Alternativt skal tidsbudgettet ændres ud fra en måling i en almindelig (ikke-headless) browser på en planlæggers maskine.
+
+## 5. 0B.4 — Optimize i en Web Worker
+
+> Branch: `fase0b/worker` (worktree `E:/rf-fase0/pladser-worker`), base `fd58589`. Dato: 2026-11-07. Ikke merget, ikke deployet.
+
+### Hvad er ændret
+
+| Del | Ændring |
+|---|---|
+| `optimizeZone(…, onProgress)` | Valgfri hook `onProgress(runs, planned)` efter hvert layout. `planned` er en øvre grænse (opdateres efter trin 1 og 2), så fremdriften aldrig overstiger 100 %. Uden hook er resultatet uændret (test) |
+| Worker (engine-regionen) | `handleOptimizeMessage` / `optimizeWorkerMain` / `buildOptimizeWorkerSource`. Worker-scriptet = Turf (hentet med `fetch(url, { integrity })` med samme SRI-hash som `<script>`-tagget; ingen `importScripts`) + engine-regionen skåret ud af sidens egen inline-script + beskedhåndtering. Ingen Leaflet, ingen DOM, intet netværk i workeren. Zoner og eksklusioner sendes som GeoJSON |
+| `optimize()` (UI) | Én worker pr. kørsel (ingen pool), oprettet ved behov fra en Blob-URL og termineret når kørslen slutter. Status: "Optimizing area 3 (2 of 7) — 43 %" (fremdrift hver 25. layout). Hovedtråden tegner kun hver zones resultat (én placering) |
+| Annullér | Knappen **Cancel** vises under kørsel og kalder `worker.terminate()` med det samme. **Valg:** zoner, der var færdige før annulleringen, beholder deres nye layout og indstilling; alle andre zoner beholder deres tidligere layout (Optimize rydder ikke længere alle layouts ved start). Knapperne genaktiveres, og status siger fx "Optimize cancelled: 1 of 2 areas optimized and kept; the other areas keep their previous layout." "BEST FOUND"-mærket vises kun efter en fuldført kørsel |
+| Ændringer under kørsel | Ny/redigeret/slettet zone, ny/slettet eksklusionszone eller "Clear all" annullerer en igangværende Optimize (søgningen passer ikke længere til kortet); statuslinjen nævner det |
+| Fallback | Kan workeren ikke oprettes (ingen `Worker`, Turf-hentning fejler, blokeret Blob-worker, worker-fejl), køres de resterende zoner på hovedtråden som før (én zone pr. tick; Cancel virker mellem zoner), og status siger "on the main thread: Web Worker unavailable (…)" |
+| Calculate | Uændret |
+
+### Determinisme og kapacitet
+
+- `node bench/compare-0b.mjs` regenererer `bench/results/fase0b-compare.json` **byte-identisk** (sammenlignet med den committede blob med `cmp` og `git diff --exit-code`).
+- `tests/worker.test.mjs` kører det **rigtige** worker-script (bygget af appens `buildOptimizeWorkerSource` af den lokale Turf-fil, hvis sha384 testes mod SRI-hashen i `index.html`) i en rigtig tråd (`node:worker_threads` med en lille `self`-shim) og sammenligner med `optimizeZone` direkte: identiske resultater med overlap og eksklusioner, begge algoritmer; besked-rækkefølge; fremdrift ≤ 100 %; fejlbesked; og at `terminate()` stopper midt i en zone (< 1 s), så kun færdige zoner er rapporteret.
+- Headless Chrome 156 (røgtest, `bench/browser/worker-bench.html`): 8/8 cases identiske mellem hovedtråd og worker; i appen gav en fuld kørsel med 2 zoner samme indstillinger som `optimizeZone` på hovedtråden.
+
+### Tider
+
+Node v25.6.1 (`node bench/compare-0b.mjs`, ny søgning, én zone pr. case):
+
+| Fixture | Produkt | Algoritme | Layouts | Node |
+|---|---|---|---:|---:|
+| D_irregular | GAP_5x10 | greedy | 999 | 2.886 ms |
+| D_irregular | GAP_5x10 | straight | 996 | 1.795 ms |
+| D_irregular | SYN_6x8 | greedy / straight | 999 / 996 | 831 / 1.311 ms |
+| E_strip_62x400 | GAP_5x10 | greedy / straight | 757 / 757 | 1.142 / 1.007 ms |
+| E_strip_62x400 | SYN_6x8 | greedy / straight | 757 / 756 | 333 / 723 ms |
+
+Headless Chrome 156 (røgtest på udviklermaskinen, ikke den endelige måling): D_irregular GAP greedy 2.900 ms på hovedtråden (UI frosset 2.895 ms) mod 3.007 ms i workeren inkl. opstart (længste UI-pause 11 ms). Alle 8 cases: længste UI-pause med worker ≤ 11 ms.
+
+| Måling (rigtig Chrome, ikke headless) | D_irregular GAP greedy | D_irregular GAP straight | E_strip GAP greedy | E_strip GAP straight |
+|---|---:|---:|---:|---:|
+| Chrome hovedtråd (ms / længste UI-pause) | TODO | TODO | TODO | TODO |
+| Chrome Web Worker (ms inkl. opstart / længste UI-pause) | TODO | TODO | TODO | TODO |
+
+**Sådan måles (orkestrator):** `npm run bench:browser` (statisk server på `127.0.0.1:8790`, kun repo-roden) → åbn `http://127.0.0.1:8790/bench/browser/worker-bench.html?auto=1` i Chrome i forgrunden. Siden indlæser engine-regionen fra `/index.html`, kører hver case (D_irregular og E_strip_62x400 × GAP_5x10 og SYN_6x8 × greedy og straight) først på hovedtråden og derefter i en worker bygget som i appen, og viser ms, layouts, længste UI-pause (største afstand mellem animation frames), antal fremdriftsbeskeder og om resultaterne er identiske. JSON står nederst på siden og i `window.benchResult`. `?only=D_irregular|GAP_5x10` begrænser til én fixture/ét produkt. Fixtures: `bench/fixtures/worker-bench.json` (syntetiske, genereres med `node bench/make-worker-fixtures.mjs`). Siden kalder ikke ArcGIS.
+
+### Acceptkriterie 0B.3 efter 0B.4
+
+UI'et fryser ikke længere under Optimize: søgningen kører i workeren, og hovedtråden laver kun én placering pr. zone ved visning. Tiden pr. zone er omtrent den samme som på hovedtråden (i headless-røgtesten 2–150 ms mere pr. zone, inkl. opstart af workeren). Om 0B.3 nu anses som opfyldt, afgøres ved port G0B ud fra Chrome-målingen ovenfor.
+
+### Risici / åbne punkter
+
+- Workeren henter Turf igen fra unpkg (normalt fra browserens cache). Er CDN'et nede efter sideindlæsning, eller blokerer en fremtidig CSP Blob-workers (`worker-src blob:`), bruges hovedtråds-fallback, og status siger det. Sætter man en CSP, skal `worker-src blob:` med.
+- Read-only-vagten (A9) er installeret på `window`, ikke i workeren; workerkoden har ingen netværkskald (statisk test).
+- `bench/lib/extract.mjs` omskriver ordet `drawnExclusions`, så `buildOptimizeWorkerSource` testes ud fra den uændrede regionstekst, ikke via `loadEngine`.
