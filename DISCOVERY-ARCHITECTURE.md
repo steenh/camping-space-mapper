@@ -5,6 +5,8 @@
 
 ## 1. Målbillede i én figur
 
+> **ArcGIS er read-only i alle faser** (beslutning [A9](DECISION-LOG.md), 2026-11-07). Appen læser zoner, fradrag og eksisterende lag, men skriver aldrig tilbage — heller ikke til testlag. Scenarier, layouts og kapacitetsberegninger gemmes i appens egen datamodel og lagring; output leveres som GeoJSON-eksport. Et eventuelt dedikeret ArcGIS-outputlag er ikke en del af roadmappen og kræver en ny, eksplicit godkendelse.
+
 ```mermaid
 flowchart TB
   subgraph Client["Browser (SPA, TypeScript)"]
@@ -26,18 +28,16 @@ flowchart TB
   end
   subgraph ArcGIS["ArcGIS Enterprise (maps.roskilde-festival.dk)"]
     Portal["Portal OAuth2 (PKCE)"]
-    Zones["Zonelag / fradragslag (læs)"]
-    Stage["Staging-lag (skriv)"]
-    Prod["Produktionslag (promovér)"]
+    Zones["Zonelag / fradragslag / lag 835<br/>(kun læsning)"]
   end
+  Export["GeoJSON-eksport<br/>(fil til Team GIS)"]
   UI --> Map
   UI <--> Store
   UI <--> Workers
   UI --> Access --> API
   API --> D1
   API --> R2
-  API -->|"kun allowlistede kald"| Stage
-  API -->|"promovering efter godkendelse"| Prod
+  UI --> Export
   Store -->|"query (læs, direkte hvis CORS tillader)"| Zones
   UI -->|PKCE| Portal
 ```
@@ -145,7 +145,7 @@ erDiagram
   ZONE_RESULT ||--o| LAYOUT : "har"
   RUN ||--o| SNAPSHOT : "fryses som"
   SNAPSHOT ||--o{ APPROVAL : "godkendes"
-  SNAPSHOT ||--o{ PUBLISH_JOB : "publiceres via"
+  SNAPSHOT ||--o{ EXPORT : "eksporteres som (GeoJSON)"
   ZONE_SOURCE {
     string source_id
     int festival_year
@@ -219,7 +219,7 @@ Regler:
 |---|---|
 | `rf-camping-command-center` (`40_registry/products.yml`) | **Fælles `product_id`** (fx `get_a_place`). Parameterregistret bør enten læse herfra eller være kilden for dimensioner, personer pr. plads og kapacitet, så de to ikke divergerer. Godkendt kapacitet kan skrives tilbage som forslag (PR), aldrig direkte |
 | Camping Portal / årsplan | Milepæle som "zonesæt modtaget" og "kapacitet godkendt" kan kobles til årsplanen. Camping Portal er autoritativ for årsplanen, så ændringer sker som ændringspakker, der godkendes af et menneske |
-| ArcGIS (Team GIS) | Læs zoner og fradrag. Publicér layouts til staging, og promovér efter godkendelse (§7) |
+| ArcGIS (Team GIS) | **Kun læsning** af zoner, fradrag og eksisterende lag ([A9](DECISION-LOG.md)). Layouts afleveres som GeoJSON-eksport; Team GIS importerer selv |
 | Andre værktøjer | Et lille læse-API: `GET /api/seasons/:year/capacity?status=approved` returnerer JSON/CSV pr. zone og produkt, med status og snapshot-hash |
 
 ## 5. Hvad der bevidst *ikke* foreslås
@@ -241,7 +241,9 @@ Detaljerede fund står i [Nuværende tilstand §11](DISCOVERY-CURRENT-STATE.md).
 | Klientside | Ingen SRI, flydende `esri-leaflet@3`, ingen CSP, token i `sessionStorage` |
 | Adgang | Appen og proxyerne er offentlige |
 
-## 7. Sikker publicering — design
+## 7. Sikker publicering — design (ERSTATTET)
+
+> ⚠ **Erstattet 2026-11-07 af beslutning [A9](DECISION-LOG.md): ArcGIS er read-only.** Publiceringsflowet nedenfor (staging, promovering, applyEdits, P1–P10) er **ikke** en del af roadmappen og må ikke implementeres. Afsnittet bevares kun som historik over, hvad der blev overvejet. Den nuværende håndhævelse står i §8.
 
 ### 7.1 Principper
 
@@ -312,3 +314,17 @@ sequenceDiagram
 - Streng CSP (`script-src 'self'`, `connect-src` til egne domæner + ArcGIS + tilefelter).
 - Token i hukommelsen; refresh via `ArcGISIdentityManager`; udløbstjek før skrivning.
 - Ingen `innerHTML` med brugerdata; React/Lit escaper som standard.
+
+## 8. ArcGIS read-only — håndhævelse (A9)
+
+| Lag | Håndhævelse | Test |
+|---|---|---|
+| Brugerflade | Ingen push-knap, intet mållag, ingen skrivefunktion i koden | `tests/static.test.mjs`: ingen push-kode; skriveoperationsnavne findes kun i vagten |
+| Browser | Read-only-vagt: `fetch`, `XMLHttpRequest` og `sendBeacon` afviser `addFeatures`, `updateFeatures`, `deleteFeatures`, `applyEdits`, `append`, `truncate`, `calculate`, attachment- og definitionsændringer, uanset vært, store/små bogstaver, URL-kodning, token eller headers; esri-leaflets redigeringsmetoder er slået fra | Negative tests med 14 skrive-URL'er × 3 header-sæt; browser-runtime: 5 skriveveje blokeret, 0 skrivekald i netværksloggen |
+| Server | Ingen skriveproxy (`/arc-proxy` fjernet). Eneste funktion er `/arc-token` (OAuth-kodeudveksling), som kun kan kalde portalens token-endpoint | `tests/functions.test.mjs`: kun `arc-token.js` findes; den kalder kun token-URL'en uanset Origin, parametre og sti. Runtime: POST/PUT til `/arc-proxy` → 405 |
+| ArcGIS | Brugerens egne rettigheder gælder uden for appen (KB-03) | — (uden for appens kontrol) |
+
+**Lagring og output:** Scenarier, layouts og kapacitetsberegninger lagres i appens egen datamodel (lokalt først; D1/R2 senere). Output: GeoJSON-eksport. Et dedikeret ArcGIS-outputlag kræver en ny, eksplicit godkendelse og er ikke planlagt.
+
+**Release-gates:** Enhver release skal bestå de negative read-only-tests. En ændring, der genindfører en skrivevej mod ArcGIS, er en arkitekturændring, der kræver en ny beslutning i [Beslutningslog](DECISION-LOG.md).
+

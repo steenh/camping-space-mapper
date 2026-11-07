@@ -33,26 +33,112 @@ test('supply chain: SRI hashes match the CDN files', { skip: !process.env.CSM_NE
   }
 });
 
-test('push: the destructive ArcGIS push is disabled by a code flag', () => {
-  assert.match(html, /const ENABLE_ARCGIS_PUSH = false;/);
-  assert.match(html, /async function pushToArcGIS\(\) \{\s*if \(!ENABLE_ARCGIS_PUSH\) \{/, 'guard must be the first statement');
-  assert.match(html, /arcSyncArea'\)\.style\.display\s*=\s*\(ENABLE_ARCGIS_PUSH &&/, 'push UI must stay hidden');
+// ── ArcGIS is read-only (DECISION-LOG A9) ──────────────────────────────────────
+const region = (() => {
+  const a = html.indexOf('// @arcgis-readonly-begin'), b = html.indexOf('// @arcgis-readonly-end');
+  assert.ok(a > 0 && b > a, 'read-only region markers missing');
+  return html.slice(a, b);
+})();
+const loadReadOnly = () => new Function(`${region}; return { isArcgisWriteRequest, installArcgisReadOnlyGuard, disableEsriEditing, classifyArcLayerResult };`)();
+
+const WRITE_URLS = [
+  'https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0/addFeatures',
+  'https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0/deleteFeatures?where=1%3D1&token=x',
+  'https://maps.roskilde-festival.dk/arcgis/rest/services/AllEditables_GODKENDT_V3_PRO/FeatureServer/835/updateFeatures',
+  'https://maps.roskilde-festival.dk/arcgis/rest/services/AllEditables_GODKENDT_V3_PRO/FeatureServer/applyEdits',
+  'https://other-host.example/arcgis/rest/services/X/FeatureServer/0/applyEdits',
+  'https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0/APPLYEDITS',
+  'https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0/%61ddFeatures',
+  'https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0/addFeatures/',
+  'https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0/truncate',
+  'https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0/append',
+  'https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0/calculate',
+  'https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0/12/addAttachment',
+  'https://maps.roskilde-festival.dk/server/rest/admin/services/Hosted/Space_mapping/FeatureServer/updateDefinition',
+  '/arc-proxy/../server/rest/services/X/FeatureServer/0/addFeatures',
+];
+const READ_URLS = [
+  'https://maps.roskilde-festival.dk/arcgis/rest/services/AllEditables_GODKENDT_V3_PRO/FeatureServer/835?f=json&token=x',
+  'https://maps.roskilde-festival.dk/arcgis/rest/services/AllEditables_GODKENDT_V3_PRO/FeatureServer/835/query?where=1%3D1&returnCountOnly=true&f=json',
+  'https://maps.roskilde-festival.dk/portal/sharing/rest/oauth2/authorize?client_id=x',
+  '/arc-token',
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/1/2',
+];
+
+test('read-only: no push code, write proxy or write UI remains', () => {
+  for (const pattern of [/pushToArcGIS/, /ENABLE_ARCGIS_PUSH/, /arcSyncArea/, /arcLayerWriteUrl/, /\/arc-proxy\?/, /proxyPost/, /Space_mapping/, /rollbackOnFailure/]) {
+    assert.doesNotMatch(html, pattern, `found ${pattern}`);
+  }
+  // Write operation names may only appear inside the read-only guard itself.
+  const outside = html.replace(region, '');
+  assert.doesNotMatch(outside, /addFeatures|updateFeatures|deleteFeatures|applyEdits/, 'write operation referenced outside the guard');
+  assert.match(html, /installArcgisReadOnlyGuard\(window\);\s*disableEsriEditing\(L\.esri\);/, 'guard must be installed at start-up');
 });
 
-test('push: calling pushToArcGIS() makes no network request', async () => {
-  const start = html.indexOf('async function pushToArcGIS()');
-  const end = html.indexOf('function clearAll()', start);
-  const src = html.slice(start, end);
-  const calls = [];
-  let status = '';
-  const fn = new Function('ENABLE_ARCGIS_PUSH', 'arcToken', 'document', 'fetch', 'setStatus', 'polyLayers',
-    'getProductForPoly', 'turf', `${src}; return pushToArcGIS;`)(
-    false, 'token', { getElementById: () => ({ value: 'https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0' }) },
-    (...args) => { calls.push(args); return Promise.resolve(new Response('{}')); },
-    msg => { status = msg; }, new Map(), () => ({}), {});
-  await fn();
-  assert.equal(calls.length, 0, 'no request may be sent');
-  assert.match(status, /disabled/i);
+test('read-only: the guard recognises every ArcGIS write operation (any host, case, encoding) and no reads', () => {
+  const { isArcgisWriteRequest } = loadReadOnly();
+  for (const u of WRITE_URLS) assert.equal(isArcgisWriteRequest(u), true, u);
+  for (const u of READ_URLS) assert.equal(isArcgisWriteRequest(u), false, u);
+  assert.equal(isArcgisWriteRequest(new Request(WRITE_URLS[0])), true, 'Request objects');
+});
+
+test('read-only: fetch, XMLHttpRequest and sendBeacon refuse write requests whatever the token or headers', async () => {
+  const { installArcgisReadOnlyGuard } = loadReadOnly();
+  const sent = [];
+  class FakeXHR { open(method, url) { sent.push(['xhr', method, url]); } }
+  const win = {
+    fetch: async (input, init) => { sent.push(['fetch', String(input && input.url ? input.url : input), init && init.headers]); return new Response('{}'); },
+    XMLHttpRequest: FakeXHR,
+    navigator: { sendBeacon: url => { sent.push(['beacon', url]); return true; } },
+  };
+  installArcgisReadOnlyGuard(win);
+  for (const u of WRITE_URLS) {
+    for (const headers of [{}, { Origin: 'https://pladser.campops.net' }, { Authorization: 'Bearer admin-token', 'X-Esri-Authorization': 'Bearer x' }]) {
+      await assert.rejects(win.fetch(u, { method: 'POST', headers, body: 'features=[]&token=admin' }), /read-only/);
+    }
+    assert.throws(() => new win.XMLHttpRequest().open('POST', u), /read-only/);
+    assert.equal(win.navigator.sendBeacon(u, 'x'), false);
+  }
+  for (const u of READ_URLS) { await win.fetch(u); new win.XMLHttpRequest().open('GET', u); }
+  assert.equal(sent.length, READ_URLS.length * 2, 'only the read requests went through');
+});
+
+test('read-only: esri-leaflet editing methods are disabled', () => {
+  const { disableEsriEditing } = loadReadOnly();
+  const mk = () => { const C = function () {}; for (const m of ['addFeature', 'addFeatures', 'updateFeature', 'updateFeatures', 'deleteFeature', 'deleteFeatures', 'applyEdits', 'query']) C.prototype[m] = () => 'called'; return C; };
+  const esri = { FeatureLayer: mk(), FeatureLayerService: mk(), FeatureManager: mk() };
+  disableEsriEditing(esri);
+  for (const cls of Object.values(esri)) {
+    for (const m of ['addFeature', 'addFeatures', 'updateFeature', 'updateFeatures', 'deleteFeature', 'deleteFeatures', 'applyEdits']) {
+      assert.throws(() => new cls()[m](), /read-only/, m);
+    }
+    assert.equal(new cls().query(), 'called', 'reading still works');
+  }
+});
+
+test('layer status: empty layer, authorization error and loading error are told apart (KB-02)', () => {
+  const { classifyArcLayerResult: c } = loadReadOnly();
+  assert.deepEqual(c(null, 0), { state: 'empty', count: 0 });
+  assert.deepEqual(c(null, 1234), { state: 'ok', count: 1234 });
+  for (const err of [{ code: 498, message: 'Invalid Token' }, { code: 499, message: 'Token Required' }, { code: 403, message: 'You do not have permissions to access this resource or perform this operation.' }, { error: { code: 498, message: 'Invalid token.' } }]) {
+    assert.equal(c(err).state, 'auth', JSON.stringify(err));
+  }
+  for (const err of [{ code: 500, message: 'XMLHttpRequest error' }, { code: 400, message: 'Unable to complete operation.' }, { message: 'Could not parse response as JSON.' }]) {
+    assert.equal(c(err).state, 'error', JSON.stringify(err));
+  }
+  assert.equal(c(null, undefined).state, 'error', 'missing count is an error, not an empty layer');
+  assert.equal(c(null, NaN).state, 'error');
+});
+
+test('layer status: UI shows each state distinctly and ends the session on authorization errors', () => {
+  assert.match(html, /id="arcLayerStatus"/);
+  assert.match(html, /id="arcAuthMessage"/);
+  assert.match(html, /The layer is empty: it contains 0 features\./);
+  assert.match(html, /Could not load the layer/);
+  assert.match(html, /Not authorized.*ArcGIS rejected your session/);
+  assert.match(html, /arcFeatureLayer\.on\('requesterror'/);
+  assert.match(html, /Your ArcGIS session has expired/);
+  assert.match(html, /Login failed: ArcGIS did not issue a token/);
 });
 
 test('labels: no "optimal" claim for a best-found layout', () => {

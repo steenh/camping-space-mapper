@@ -9,7 +9,7 @@
 1. **Zonekilden er konfiguration, ikke kode.** En *zonekilde* pr. festivalår beskriver, hvor zonerne ligger (portal-item eller lag-URL, filter, feltmapping). Et nyt år kræver en ny konfiguration, der kan oprettes og valideres i appen, men ingen kodeændring.
 2. **En minimal datakontrakt** med fem obligatoriske elementer: `zone_id`, `zone_name`, `festival_year`, `zone_status` og geometri. Alt, der kan beregnes (areal, centroid, hash, gyldighed, ændringer), *beregner appen selv* og stoler ikke på leverede værdier.
 3. **Hver import er et immutable snapshot** med indholdshash. Beregninger peger på et snapshot, aldrig på det levende lag. Ændres ArcGIS-laget, ændres historiske tal ikke; appen viser blot, at der findes en nyere version.
-4. **Foreløbige zoner er en separat proveniensklasse.** De kan bruges til estimater, men kan aldrig blive godkendt, aldrig publiceres og aldrig blandes ubemærket med GIS-zoner.
+4. **Foreløbige zoner er en separat proveniensklasse.** De kan bruges til estimater, men kan aldrig blive godkendt, aldrig eksporteres som godkendte og aldrig blandes ubemærket med GIS-zoner.
 5. **Bruttoareal (A0) beregnes straks ved import.** Disponibelt areal og kapacitet kræver et eksplicit, kildehenvist forudsætningssæt. Uden det vises "mangler forudsætning", aldrig en standardværdi.
 6. **Ændringsdetektion** klassificerer hver zone mellem to snapshots som ny, fjernet, uændret, attributændret eller geometrisk ændret, med målte størrelser (Δareal, IoU, Hausdorff) og en støjtolerance.
 7. **Kravene til Team GIS** (§9) bør sendes, før zonelaget etableres. De er billigere at aftale nu end at reparere bagefter.
@@ -159,7 +159,7 @@ Zoneidentitet er en **organisatorisk beslutning** (samme driftsenhed eller campi
 | Kilde | Konfigureret autoritativ zonekilde | Tegnet i appen, GeoJSON-fil, digitaliseret skitse |
 | ID-rum | GIS' `zone_id` | Automatisk præfiks `TMP-` (fx `TMP-WEST-1`). Kan ikke kollidere med GIS-ID'er. Syntetiske testzoner (prototype) får proveniens `syntetisk` og præfiks `SYN-` og følger samme regler som foreløbige |
 | Højeste kapacitetsstatus | Godkendt (K4) | **Estimat eller Beregnet.** Aldrig Valideret eller Godkendt |
-| Publicering til ArcGIS | Ja, via flowet i [Arkitektur §7](DISCOVERY-ARCHITECTURE.md) | **Aldrig** |
+| Skrivning til ArcGIS | **Aldrig** (A9: ArcGIS er read-only) | **Aldrig** |
 | Visuelt | Normal udfyldning | Skraveret udfyldning, stiplet kant, mærket **FORELØBIG** på kort, i tabeller og på hvert tal |
 | Eksport (CSV/PDF/GeoJSON) | Normal | Vandmærke "FORELØBIG — ikke GIS-godkendt" + `provenance`-felt på hver række/feature |
 | Totaler | — | Altid separat linje: "GIS: 38 zoner · Foreløbig: 6 zoner", aldrig sammenlagt uden opdeling |
@@ -256,7 +256,7 @@ For at den samme geometri altid giver samme hash, også efter reprojektion eller
 - **Snapshots er immutable.** En genimport giver altid et nyt snapshot. Hvis hashen er identisk med det seneste, registreres kun "uændret, kontrolleret <tidspunkt>".
 - **Beregninger, scenarier og godkendelser refererer til `zoneset_hash`**, aldrig til zonekilden eller det levende lag.
 - Hvis det levende lag har en nyere `lastEditDate` end scenariets snapshot, viser appen: "Zonelaget er ændret siden snapshot 7 (3. feb). Importér og se ændringer?" Den skifter aldrig automatisk.
-- Snapshots, der indgår i en godkendelse eller publicering, kan ikke slettes.
+- Snapshots, der indgår i en godkendelse eller eksport, kan ikke slettes.
 - Lagring: fase 2 lokalt (IndexedDB + download/upload af snapshot-fil); fase 4 R2 (indhold) + D1 (metadata), jf. [Arkitektur §3](DISCOVERY-ARCHITECTURE.md).
 - Appens snapshots gør historikken **uafhængig af ArcGIS**. Hvis GIS bruger archiving eller versionering i en enterprise geodatabase, er det en fordel, men ikke en forudsætning.
 

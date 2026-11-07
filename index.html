@@ -391,7 +391,7 @@
       </div>
       <div class="instruction-step">
         <div class="step-num">6</div>
-        <div class="step-text"><strong>Export</strong> the result as GeoJSON via the Export / Sync section (direct push to ArcGIS is disabled in this version)</div>
+        <div class="step-text"><strong>Export</strong> the result as GeoJSON via the Export section (this app only reads from ArcGIS and never writes back)</div>
       </div>
       <div class="instruction-step">
         <div class="step-num">7</div>
@@ -402,14 +402,16 @@
     <div class="section" id="arcSection">
       <div class="section-title">ArcGIS Layers</div>
       <div id="arcAuthArea">
-        <p style="font-size:0.75rem;color:#94a3b8;margin-bottom:10px;">Log in to load restricted feature layers from your ArcGIS Enterprise portal.</p>
+        <p style="font-size:0.75rem;color:#94a3b8;margin-bottom:10px;">Log in to load restricted feature layers from your ArcGIS Enterprise portal. This app only reads from ArcGIS.</p>
+        <p id="arcAuthMessage" style="font-size:0.72rem;color:#f87171;margin-bottom:8px;display:none;"></p>
         <button class="btn btn-secondary" style="width:100%;" onclick="arcLogin()">Login to ArcGIS</button>
       </div>
       <div id="arcLayerArea" style="display:none;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <span style="font-size:0.78rem;color:#cbd5e1;">AllEditables layer</span>
+          <span style="font-size:0.78rem;color:#cbd5e1;">AllEditables layer <small style="color:#64748b;">· read-only</small></span>
           <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f97316;flex-shrink:0;"></span>
         </div>
+        <div id="arcLayerStatus" style="font-size:0.73rem;color:#94a3b8;margin-bottom:8px;min-height:1em;"></div>
         <div class="btn-row" style="margin-bottom:6px;">
           <button class="btn btn-secondary" id="arcRectBtn" onclick="toggleFeatureRectSelect()">Box select</button>
           <button class="btn btn-secondary" id="arcPolyBtn" onclick="toggleFeaturePolySelect()">Poly select</button>
@@ -520,22 +522,11 @@
     </div>
 
     <div class="section" id="exportSection" style="display:none;">
-      <div class="section-title">Export / Sync</div>
+      <div class="section-title">Export</div>
       <div class="btn-row" style="margin-bottom:10px;">
         <button class="btn btn-secondary" onclick="exportGeoJSON()">Download GeoJSON</button>
       </div>
-      <p id="arcPushDisabledNote" style="font-size:0.7rem;color:#94a3b8;">Direct push to ArcGIS is disabled in this version (it replaced the whole target layer). Download GeoJSON and hand the file to Team GIS.</p>
-      <div id="arcSyncArea" style="display:none;">
-        <div class="field" style="margin-bottom:8px;">
-          <label>Target layer</label>
-          <select id="arcLayerWriteUrl" style="width:100%;padding:7px 10px;border-radius:5px;border:1px solid #475569;background:#0f172a;color:#f1f5f9;font-size:0.85rem;cursor:pointer;">
-            <option value="https://maps.roskilde-festival.dk/server/rest/services/Hosted/Space_mapping/FeatureServer/0">Camping West</option>
-          </select>
-        </div>
-        <button class="btn btn-primary" style="width:100%;" onclick="pushToArcGIS()">Push to ArcGIS (replace)</button>
-        <p style="font-size:0.7rem;color:#94a3b8;margin-top:6px;">Deletes all features in that layer, then writes current spaces with product_type attribute.</p>
-        <p style="font-size:0.7rem;color:#f87171;margin-top:4px;font-weight:600;">⚠ This is an advanced destructive feature — don't use unless you know what you're doing. Use the GeoJSON export feature to be safe.</p>
-      </div>
+      <p id="arcReadOnlyNote" style="font-size:0.7rem;color:#94a3b8;">This app only reads from ArcGIS and never writes back. Download the GeoJSON and hand the file to Team GIS.</p>
     </div>
 
     <div class="section">
@@ -640,10 +631,78 @@
     const ARC_DEFAULT_STYLE  = { color: '#f97316', fillColor: '#f97316', fillOpacity: 0.2, weight: 1.5 };
     const ARC_SELECTED_STYLE = { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.5, weight: 2.5 };
 
-    // Destructive "replace" push (deleteFeatures where 1=1 + addFeatures) is disabled
-    // (DECISION-LOG B1). It returns only via a validated, approved, reversible publishing
-    // flow (DISCOVERY-ARCHITECTURE §7). The /arc-proxy function is closed by default too.
-    const ENABLE_ARCGIS_PUSH = false;
+    // @arcgis-readonly-begin ── ArcGIS is READ-ONLY for this app (DECISION-LOG A9) ──────
+    // The app only reads from ArcGIS. Every write operation is blocked here, whatever the
+    // URL, host, user role or token: fetch, XMLHttpRequest and sendBeacon refuse ArcGIS edit
+    // endpoints, and esri-leaflet's editing methods are disabled. There is no server-side
+    // write path either (the /arc-proxy function has been removed).
+    const ARCGIS_WRITE_OPERATIONS = /\/(addFeatures|updateFeatures|deleteFeatures|applyEdits|append|truncate|calculate|addAttachment|updateAttachment|deleteAttachments|addToDefinition|updateDefinition|deleteFromDefinition)(\/|$)/i;
+
+    function isArcgisWriteRequest(input) {
+      const raw = input && typeof input === 'object' && 'url' in input ? input.url : input;
+      let path;
+      try {
+        path = decodeURIComponent(new URL(String(raw), 'https://placeholder.invalid/').pathname);
+      } catch (_) {
+        return true; // unparsable URL: refuse rather than guess
+      }
+      return ARCGIS_WRITE_OPERATIONS.test(path);
+    }
+
+    function installArcgisReadOnlyGuard(win) {
+      const refuse = url => new Error('Blocked: this app never writes to ArcGIS (read-only). ' + String(url).slice(0, 200));
+      if (win.fetch) {
+        const originalFetch = win.fetch.bind(win);
+        win.fetch = function (input, init) {
+          if (isArcgisWriteRequest(input)) return Promise.reject(refuse(input && input.url ? input.url : input));
+          return originalFetch(input, init);
+        };
+      }
+      if (win.XMLHttpRequest) {
+        const originalOpen = win.XMLHttpRequest.prototype.open;
+        win.XMLHttpRequest.prototype.open = function (method, url) {
+          if (isArcgisWriteRequest(url)) throw refuse(url);
+          return originalOpen.apply(this, arguments);
+        };
+      }
+      if (win.navigator && typeof win.navigator.sendBeacon === 'function') {
+        const originalBeacon = win.navigator.sendBeacon.bind(win.navigator);
+        win.navigator.sendBeacon = (url, data) => (isArcgisWriteRequest(url) ? false : originalBeacon(url, data));
+      }
+    }
+
+    function disableEsriEditing(esri) {
+      const methods = ['addFeature', 'addFeatures', 'updateFeature', 'updateFeatures', 'deleteFeature', 'deleteFeatures', 'applyEdits'];
+      for (const cls of [esri && esri.FeatureLayer, esri && esri.FeatureLayerService, esri && esri.FeatureManager]) {
+        if (!cls || !cls.prototype) continue;
+        for (const m of methods) {
+          if (typeof cls.prototype[m] === 'function') {
+            cls.prototype[m] = function () { throw new Error('Blocked: this app never writes to ArcGIS (read-only).'); };
+          }
+        }
+      }
+    }
+
+    // Maps the answer of a feature-count query to what the user is shown. Keeps "the layer
+    // is empty", "you are not authorized" and "the layer could not be loaded" apart.
+    function classifyArcLayerResult(err, count) {
+      if (err) {
+        const code = Number(err.code || (err.error && err.error.code)) || null;
+        const message = String(err.message || (err.error && err.error.message) || '');
+        if ([401, 403, 498, 499].includes(code) || /token|not authori[sz]ed|permission|authentication/i.test(message)) {
+          return { state: 'auth', code, message };
+        }
+        return { state: 'error', code, message: message || 'network error or the service is unavailable' };
+      }
+      if (typeof count !== 'number' || !Number.isFinite(count) || count < 0) {
+        return { state: 'error', code: null, message: 'The layer did not return a feature count' };
+      }
+      return count === 0 ? { state: 'empty', count: 0 } : { state: 'ok', count };
+    }
+    // @arcgis-readonly-end
+
+    installArcgisReadOnlyGuard(window);
+    disableEsriEditing(L.esri);
 
     // ── Product types ─────────────────────────────────────────────────────────
     let nextProductId = 2;
@@ -886,6 +945,23 @@
         for (const part of zoneParts(source)) rings.push(part.outer);
       }
       return rings;
+    }
+
+    // KNOWN LIMITATION KB-01 (KENDTE-BEGRÆNSNINGER.md): zoneOverlapExclusions() excludes the
+    // outer ring of each overlap, so ground inside a hole of the overlap (e.g. a hole in the
+    // earlier zone that lies inside this zone) is not used by either zone. This returns that
+    // unused ground in m² for zone `index`, so the UI can warn that its capacity is understated.
+    function overlapUnusedM2(zoneGeos, index) {
+      let unused = 0;
+      for (let j = 0; j < index; j++) {
+        let inter;
+        try { inter = turf.intersect(zoneGeos[index], zoneGeos[j]); } catch (_) { inter = undefined; }
+        if (!inter) continue;
+        for (const part of zoneParts(inter)) {
+          for (const hole of part.holes) unused += turf.area(turf.polygon([hole]));
+        }
+      }
+      return unused;
     }
 
     // Gross area of all zones without double counting overlaps (m²).
@@ -1547,6 +1623,7 @@
     let arcToken       = null;
     let arcTokenExpiry = 0;
     let arcFeatureLayer = null;
+    let arcExpiryTimer  = null;
     const selectedArcFeatures = new Set();
     let featureRectMode    = false;
     let featureRectHandler = null;
@@ -1630,6 +1707,13 @@
       });
       arcFeatureLayer.addTo(map);
       arcFeatureLayer.on('load', updateArcUI);
+      // Feature requests per map view: an authorization or loading error must be visible.
+      arcFeatureLayer.on('requesterror', e => setArcLayerStatus(classifyArcLayerResult({ code: e.code, message: e.message })));
+      arcFeatureLayer.on('authenticationrequired', () => setArcLayerStatus({ state: 'auth', code: 499, message: 'Authentication required' }));
+      clearTimeout(arcExpiryTimer);
+      arcExpiryTimer = setTimeout(() => endArcSession('Your ArcGIS session has expired. Log in again.'),
+                                  Math.max(0, arcTokenExpiry - Date.now()));
+      checkArcLayer();
       arcFeatureLayer.on('click', e => {
         L.DomEvent.stopPropagation(e);
         const layer = e.layer;
@@ -1914,6 +1998,43 @@
       }, 30);
     }
 
+    // Counts the features in the layer (a read-only query) to tell an empty layer apart
+    // from an authorization or loading error.
+    function checkArcLayer() {
+      setArcLayerStatus({ state: 'loading' });
+      L.esri.query({ url: ARCGIS_LAYER_URL, token: arcToken }).where('1=1')
+        .count((err, count) => setArcLayerStatus(classifyArcLayerResult(err, count)));
+    }
+
+    function setArcLayerStatus(result) {
+      const el = document.getElementById('arcLayerStatus');
+      if (result.state === 'auth') {
+        endArcSession(`Not authorized${result.code ? ` (${result.code})` : ''}: ArcGIS rejected your session. Log in again.`);
+        return;
+      }
+      const view = {
+        loading: ['#94a3b8', 'Checking the layer…'],
+        ok:      ['#34d399', `${(result.count || 0).toLocaleString('nl-NL')} features in the layer (loaded per map view).`],
+        empty:   ['#fbbf24', 'The layer is empty: it contains 0 features.'],
+        error:   ['#f87171', `Could not load the layer${result.code ? ` (${result.code})` : ''}: ${result.message}`],
+      }[result.state];
+      el.style.color = view[0];
+      el.textContent = view[1];
+    }
+
+    // Forgets the token and shows the login with a reason (rejected or expired session).
+    function endArcSession(message) {
+      clearTimeout(arcExpiryTimer);
+      arcToken = null;
+      arcTokenExpiry = 0;
+      sessionStorage.removeItem('arc_token');
+      sessionStorage.removeItem('arc_expiry');
+      if (arcFeatureLayer) { arcFeatureLayer.remove(); arcFeatureLayer = null; }
+      selectedArcFeatures.clear();
+      updateArcUI();
+      showArcLoginUI(message);
+    }
+
     function updateArcUI() {
       const count    = selectedArcFeatures.size;
       const countEl  = document.getElementById('arcFeatureCount');
@@ -1934,6 +2055,8 @@
         history.replaceState({}, '', window.location.pathname);
         const ok = await exchangeCodeForToken(code, state);
         if (ok) { showArcLayerUI(); initFeatureLayer(); return; }
+        showArcLoginUI('Login failed: ArcGIS did not issue a token. Try again.');
+        return;
       }
       const storedToken  = sessionStorage.getItem('arc_token');
       const storedExpiry = parseInt(sessionStorage.getItem('arc_expiry') || '0');
@@ -1944,7 +2067,10 @@
       showArcLoginUI();
     }
 
-    function showArcLoginUI() {
+    function showArcLoginUI(message) {
+      const msg = document.getElementById('arcAuthMessage');
+      msg.textContent = message || '';
+      msg.style.display = message ? 'block' : 'none';
       document.getElementById('arcAuthArea').style.display  = 'block';
       document.getElementById('arcLayerArea').style.display = 'none';
     }
@@ -2082,6 +2208,10 @@
         const area = Math.round(turf.area(zoneGeos[i])).toLocaleString('nl-NL');
         const overlapM2 = zoneOverlapExclusions(zoneGeos, i)
           .reduce((s, ring) => s + turf.area(turf.polygon([ring])), 0);
+        const unusedM2 = overlapUnusedM2(zoneGeos, i);
+        const limitationNote = unusedM2 >= 1
+          ? `<small style="color:#f87171;display:block;">⚠ ${Math.round(unusedM2).toLocaleString('nl-NL')} m² inside this overlap (a hole in the earlier area) is not used by either area — capacity is understated. Check manually before using this number (known limitation KB-01).</small>`
+          : '';
         const overlapNote = overlapM2 >= 1
           ? `<small style="color:#fbbf24;display:block;">Overlaps an earlier area by ${Math.round(overlapM2).toLocaleString('nl-NL')} m² — spaces are placed there only once, in the earlier area</small>`
           : '';
@@ -2093,7 +2223,7 @@
         const opts = products.map(p => `<option value="${p.id}"${p.id === pid ? ' selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
         return `<div class="area-entry">
           <div class="area-entry-top">
-            <span class="area-label">Area ${i + 1} <small>(${area} m²)</small>${overlapNote}${settingNote}</span>
+            <span class="area-label">Area ${i + 1} <small>(${area} m²)</small>${overlapNote}${limitationNote}${settingNote}</span>
             <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.72rem;flex-shrink:0;" onclick="selectAllInPolygon(${i})">Select all</button>
           </div>
           <select onchange="setPolygonProduct(${i}, this.value)">${opts}</select>
@@ -2105,6 +2235,13 @@
     function getTargetPolyIndices() {
       if (selectedSpaces.size === 0) return null;
       return new Set([...selectedSpaces].map(l => l._polyIndex));
+    }
+
+    // Appended to result messages while any area is affected by known limitation KB-01.
+    function limitationSuffix() {
+      const zoneGeos = drawnPolygons.map(p => p.toGeoJSON());
+      const affected = zoneGeos.filter((_, i) => overlapUnusedM2(zoneGeos, i) >= 1).length;
+      return affected > 0 ? ` ⚠ Capacity understated in ${affected} area${affected !== 1 ? 's' : ''} (KB-01, see Areas).` : '';
     }
 
     function getTotalStats() {
@@ -2162,7 +2299,7 @@
           const scopeLabel = targetIndices ? ` · ${targetIndices.size} area${targetIndices.size !== 1 ? 's' : ''}` : '';
           setStatus(
             spaces > 0
-              ? `${count} group${count !== 1 ? 's' : ''} placed → ${spaces} camping spaces${modeLabel}${scopeLabel}.`
+              ? `${count} group${count !== 1 ? 's' : ''} placed → ${spaces} camping spaces${modeLabel}${scopeLabel}.${limitationSuffix()}`
               : 'Nothing fits yet. Try a larger area or different rotation.',
             spaces > 0 ? 'ok' : ''
           );
@@ -2223,7 +2360,7 @@
         const scopeLabel = targetIndices ? ` · ${targetIndices.size} area${targetIndices.size !== 1 ? 's' : ''}` : '';
         setStatus(
           spaces > 0
-            ? `Best found per area: ${count} groups (${spaces} spaces)${modeLabel}${scopeLabel} · ${runs.toLocaleString('nl-NL')} layouts tried.`
+            ? `Best found per area: ${count} groups (${spaces} spaces)${modeLabel}${scopeLabel} · ${runs.toLocaleString('nl-NL')} layouts tried.${limitationSuffix()}`
             : 'Nothing fits. Try a larger polygon.',
           spaces > 0 ? 'ok' : ''
         );
@@ -2243,8 +2380,6 @@
     function updateExportSection() {
       const hasResults = polyResults.size > 0;
       document.getElementById('exportSection').style.display = hasResults ? 'block' : 'none';
-      document.getElementById('arcSyncArea').style.display   = (ENABLE_ARCGIS_PUSH && hasResults && arcToken) ? 'block' : 'none';
-      document.getElementById('arcPushDisabledNote').style.display = ENABLE_ARCGIS_PUSH ? 'none' : 'block';
     }
 
     function exportGeoJSON() {
@@ -2273,84 +2408,6 @@
       a.href = URL.createObjectURL(blob);
       a.download = 'camping-layout.geojson';
       a.click();
-    }
-
-    async function pushToArcGIS() {
-      if (!ENABLE_ARCGIS_PUSH) {
-        setStatus('Push to ArcGIS is disabled in this version. Use Download GeoJSON and hand the file to Team GIS.', '');
-        return;
-      }
-      const layerUrl = document.getElementById('arcLayerWriteUrl').value.trim().replace(/\/+$/, '');
-      if (!layerUrl) { setStatus('Enter the ArcGIS feature layer URL first.', ''); return; }
-      if (!arcToken)  { setStatus('Not authenticated with ArcGIS.', ''); return; }
-
-      setStatus('Pushing to ArcGIS…', 'busy');
-
-      const proxyPost = async (endpoint, body) => {
-        const resp = await fetch(`/arc-proxy?target=${encodeURIComponent(endpoint)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ ...body, token: arcToken, f: 'json', referer: window.location.origin })
-        });
-        const text = await resp.text();
-        console.log(`[ArcGIS] ${endpoint}:`, text);
-        try { return JSON.parse(text); } catch (_e) { throw new Error(`Non-JSON response: ${text.slice(0, 200)}`); }
-      };
-
-      const arcError = r => {
-        if (!r.error) return null;
-        const e = r.error;
-        return typeof e === 'string' ? e : (e.message || e.description || JSON.stringify(e));
-      };
-
-      try {
-        // 1. Delete all existing features
-        const delResult = await proxyPost(`${layerUrl}/deleteFeatures`, { where: '1=1', rollbackOnFailure: 'false' });
-        const delErr = arcError(delResult);
-        if (delErr) throw new Error(`deleteFeatures: ${delErr}`);
-
-        // 2. Build feature array
-        const arcFeatures = [];
-        for (const [polyIndex, layers] of polyLayers) {
-          const product = getProductForPoly(polyIndex);
-          for (const layer of layers) {
-            if (layer._polyIndex === undefined) continue; // skip block outlines
-            let ring;
-            if (layer._circleExport) {
-              const { clng, clat, radiusKm } = layer._circleExport;
-              ring = turf.circle([clng, clat], radiusKm, { steps: 32 }).geometry.coordinates[0];
-            } else {
-              const latlngs = layer.getLatLngs()[0];
-              ring = latlngs.map(ll => [ll.lng, ll.lat]);
-              ring.push(ring[0]); // close ring
-            }
-            arcFeatures.push({
-              geometry: { rings: [ring], spatialReference: { wkid: 4326 } },
-              attributes: {
-                product_type: product.name,
-                area_index:   polyIndex + 1,
-                block_key:    layer._blockKey
-              }
-            });
-          }
-        }
-
-        // 3. Add features (ArcGIS has a 2000-feature limit per request — chunk if needed)
-        const CHUNK = 500;
-        for (let i = 0; i < arcFeatures.length; i += CHUNK) {
-          const chunk = arcFeatures.slice(i, i + CHUNK);
-          const addResult = await proxyPost(`${layerUrl}/addFeatures`, {
-            features: JSON.stringify(chunk)
-          });
-          const addErr = arcError(addResult);
-          if (addErr) throw new Error(`addFeatures: ${addErr}`);
-        }
-
-        setStatus(`${arcFeatures.length} spaces pushed to ArcGIS.`, 'ok');
-      } catch (err) {
-        console.error('ArcGIS push failed:', err);
-        setStatus(`ArcGIS push failed: ${err.message}`, '');
-      }
     }
 
     function clearAll() {

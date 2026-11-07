@@ -34,7 +34,7 @@ flowchart LR
     F["Forudsætninger<br/>(skuffe: parametre, kilder, mangler)"]
   end
   O["1 · Overblik<br/>site → område → zone"] <--> D["2 · Designer<br/>zone → blok → plads"]
-  O --> G["3 · Godkend & publicér<br/>validering, diff, godkendelse"]
+  O --> G["3 · Godkend & eksportér<br/>validering, godkendelse, GeoJSON"]
   D --> G
   S -.-> O
   S -.-> D
@@ -46,7 +46,7 @@ flowchart LR
 |---|---|---|
 | **1 · Overblik** | Hvor meget kapacitet har vi, hvor, med hvilken sikkerhed, og hvad har ændret sig? | Campingledelse, planlæggere |
 | **2 · Designer** | Hvordan ser det bedste layout ud i denne zone, og hvad koster en ændring? | Planlægger, Team GIS |
-| **3 · Godkend & publicér** | Er dette layout gyldigt, hvem har godkendt det, og hvad ændres i ArcGIS? | Godkender, Team GIS |
+| **3 · Godkend & eksportér** | Er dette layout gyldigt, og hvem har godkendt det? Eksport som GeoJSON til Team GIS (ArcGIS er read-only, A9) | Godkender, Team GIS |
 | *Scenarie* | Hvad hvis? Sidste år mod i år? | Alle |
 | *Forudsætninger* | Hvilke tal og regler bygger dette på, og hvad mangler? | Alle; ejes af produktansvarlige og sikkerhed |
 
@@ -80,19 +80,12 @@ Ingen optegning er nødvendig. Optimering (K2) kan startes i baggrunden for alle
 2. Estimater genberegnes straks, og layouts genberegnes i baggrunden.
 3. Sammenlign-tilstand: delt kort eller swipe, Δ-tabel og Δ-vandfald.
 
-### BR4 — Godkendelse og publicering
+### BR4 — Godkendelse og eksport (ArcGIS read-only, A9)
 
 1. Planlæggeren markerer zoner som **Klar til godkendelse**.
-2. Godkenderen ser en valideringsrapport, forudsætninger, Δ mod sidst godkendte og diff mod ArcGIS-mållaget (tilføjes / ændres / fjernes, areal pr. produkt).
+2. Godkenderen ser en valideringsrapport, forudsætninger og Δ mod sidst godkendte.
 3. **Godkend** fryser et snapshot (hash, motorversion, godkender, tidspunkt). Status bliver **Godkendt** 🔒.
-4. **Publicér** (en særskilt rettighed):
-   1. Kør en dry-run.
-   2. Bekræft ved at taste lagnavnet.
-   3. Publicér til et staging-lag.
-   4. Kør verifikation.
-   5. Promovér.
-
-   Rollback er ét klik til det forrige snapshot (se [Arkitektur §7](DISCOVERY-ARCHITECTURE.md)).
+4. **Eksportér** det godkendte snapshot som GeoJSON (med snapshot-hash og status) til Team GIS. Appen skriver aldrig til ArcGIS; Team GIS importerer selv.
 
 ### BR5 — Kalibrering fra virkeligheden
 

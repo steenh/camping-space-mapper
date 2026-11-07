@@ -5,6 +5,8 @@
 
 ## 1. Konklusion
 
+> **Gennemgående krav (A9, 2026-11-07): ArcGIS er read-only i alle faser.** Appen skriver aldrig til ArcGIS — hverken lag 835, kommende zonelag, `Space_mapping` eller testlag. Output er GeoJSON-eksport; scenarier, layouts og beregninger gemmes i appens egen lagring. Et ArcGIS-outputlag er ikke på roadmappen og kræver ny, eksplicit godkendelse.
+
 Camping Space Mapper er en god prototype på det forkerte abstraktionsniveau for det vigtigste behov. Den kan tegne felter, men den kan ikke give et sporbart kapacitetsoverblik uden optegning. Næste generation bør derfor ikke starte med en flottere designer, men med en **kapacitetsmotor og et overblik**: zoner ind, validerede arealer og estimater ud på minutter, med tydelig status og forudsætninger.
 
 Samtidig viser målingerne, at den eksisterende placeringskerne er bedre end sit ry. Næsten hele den målbare kapacitetsgevinst (op til +27 % pr. zone på syntetiske former) ligger i den **søgning**, der omgiver den. Den kan rettes billigt.
@@ -43,8 +45,8 @@ To forhold kræver handling uafhængigt af resten:
 
 | Hvad | Med | Hvorfor |
 |---|---|---|
-| Push "replace" (delete-all) | Scope-baseret, valideret, godkendt publicering via staging med backup og rollback (P1–P10) | Kritisk risiko (F01) |
-| `/arc-proxy` åben relay | CORS-konfiguration (H5) eller smalt allowlist-API bag Cloudflare Access | Høj risiko (F07) |
+| Push "replace" (delete-all) | **Fjernet helt** (A9). Ingen skrivning til ArcGIS; GeoJSON-eksport og egen lagring | Kritisk risiko (F01) |
+| `/arc-proxy` åben relay | **Fjernet** (A9). Kun token-udvekslingen (`/arc-token`) er tilbage; den kan fjernes, hvis portalens CORS tillader det (H5) | Høj risiko (F07) |
 | Én global tilstand i én fil | `packages/engine` (TS, testet) + SPA med tre arbejdsrum | Testbarhed, skalerbarhed |
 | Leaflet.draw (uvedligeholdt) og esri-leaflet | Terra Draw + MapLibre; ArcGIS REST JS | Vedligehold, performance, F13 |
 | CDN uden SRI | Bundlede, versionslåste afhængigheder + CSP | F15 |
@@ -58,7 +60,7 @@ To forhold kræver handling uafhængigt af resten:
 4. **År-til-år-sammenligning** med dekomponering (areal, model, layout).
 5. **Snapshots og godkendelse** med status Estimeret → Beregnet → Valideret → Godkendt.
 6. **Optimering v2 i workers** med grænse og gap.
-7. **Sikker publicering** til ArcGIS.
+7. ~~Sikker publicering til ArcGIS~~ — **udgår** (A9). Erstattet af eksport (GeoJSON) og egen lagring af godkendte snapshots.
 8. **Scenarier** (hvad-hvis) med sammenligningstilstand.
 
 ## 3. Ukendte forhold, der skal undersøges
@@ -105,7 +107,7 @@ flowchart LR
   GP4 --> P5["P5–P6<br/>Forudsætninger, K1,<br/>ændringer"] --> GP6{{"GP6"}}
   GP6 --> P7["P7<br/>ArcGIS-adapter<br/>(læs, testlag)"] --> GP7{{"GP7"}}
   GP7 --> F3["Fase 3<br/>Optimering v2"] --> F4["Fase 4<br/>Scenarier, år,<br/>godkendelse"]
-  F4 --> F5["Fase 5<br/>Sikker publicering"]
+  F4 --> F5["Fase 5<br/>Eksport & egen lagring<br/>(ArcGIS read-only)"]
   F4 --> F6["Fase 6<br/>Designer"]
   A["Spor A · afklaringer<br/>GIS, sikkerhed, produkter<br/>(B6/B7)"] -.-> GA{{"GA<br/>må sendes?"}}
   GA -.-> P7
@@ -120,8 +122,8 @@ Den nuværende app forbliver i brug, indtil den nye overtager. Fase 0 ændrer **
 | 0.1 | Repo-hygiejne: `.gitignore`, `package.json` kun med udviklingsafhængigheder, `npm test` og `npm run bench` | Ren klon: `npm ci && npm test` er grøn. Appen får ingen nye runtime-afhængigheder og intet byggetrin |
 | 0.2 | Benchmark-harness i `bench/` med syntetiske fixtures; baseline genereret fra **uændret** `master` (`859849b`) | Deterministisk (to kørsler giver identisk JSON). Ingen RF-data i repo |
 | 0.3 | Golden-regressionstest | Alle fixtures uden huller, multipolygoner og overlap giver identiske blokke som baseline efter fase 0 |
-| 0.4 | Destruktiv push deaktiveret: kodeflag `false`, funktionen afviser, og UI forklarer og henviser til GeoJSON-eksport | Test bekræfter, at push-stien ikke kan nå `deleteFeatures`. Ingen kald til ArcGIS i tests |
-| 0.5 | `/arc-proxy` og `/arc-token` begrænset: https, standardport, præcis vært, sti-allowlist, POST, samme origin, `client_id`/`grant_type`-allowlist | Unit tests med mocket `fetch`: alle afvisningstilfælde giver 4xx uden udgående kald; tilladte kald videresendes |
+| 0.4 | Destruktiv push deaktiveret (senere **fjernet helt**, A9): UI henviser til GeoJSON-eksport | Test bekræfter, at push-stien ikke kan nå `deleteFeatures`. Ingen kald til ArcGIS i tests |
+| 0.5 | `/arc-proxy` begrænset (senere **fjernet**, A9) og `/arc-token` begrænset til appens egen PKCE-kodeudveksling | Unit tests med mocket `fetch`: alle afvisningstilfælde giver 4xx uden udgående kald; tilladte kald videresendes |
 | 0.6 | Kritiske geometrifejl: MultiPolygon (uendelig løkke), huller, overlap mellem zoner, guard mod ikke-endelige værdier; bruttoareal som union | Probe-tests: terminering < 1 s, 0 pladser i huller, målt overlap mellem pladser på tværs af zoner under en tolerance, der testes; arealet viser unionen |
 | 0.7 | Supply chain: versionslåste CDN-URL'er med SRI | Statisk test: ingen flydende versioner, `integrity` på alle eksterne scripts og stylesheets. Appen indlæses i browser uden konsolfejl |
 | 0.8 | Sandfærdighed og småfejl: "OPTIMAL" → "BEST FOUND", escaping af produktnavne, README ajourført | Statisk test + gennemsyn |
@@ -185,11 +187,15 @@ Senere trin i samme spor (fra den tidligere fase 2): valideringsrapport for topo
 | Statusflow Estimeret → Beregnet → Valideret → Godkendt | Godkendte tal kan ikke ændres, kun erstattes af et nyt snapshot |
 | To adskilte godkendelser (A2): GIS-zonegeometri (`zone_status`, ejes af GIS, læses fra kilden) og kapacitetsberegning (`CapacityApproval`, ejes af campingledelsen, bundet til beregningssnapshot) | En kapacitetsgodkendelse kræver, at alle zoner i snapshottet er `gis` + `godkendt`; en ændret GIS-godkendelse ophæver ikke en tidligere kapacitetsgodkendelse, men markerer den "zonegrundlag ændret" (testet) |
 
-### Fase 5 — Sikker publicering (M)
+### Fase 5 — Eksport og egen lagring (M) · ArcGIS read-only (A9)
+
+Erstatter den tidligere "Sikker publicering" (Arkitektur §7 er markeret som erstattet).
 
 | Leverance | Acceptkriterier |
 |---|---|
-| Publiceringsflow pr. [Arkitektur §7](DISCOVERY-ARCHITECTURE.md) | P1–P10 opfyldt og testet mod testlag. Produktionsskrivning kun efter godkendelse fra Team GIS |
+| Eksport af godkendte snapshots: GeoJSON (med `scenario_id`, `snapshot_hash`, `zone_id`, `product_id`, `engine_version`) + CSV/PDF-brief | Eksporten kan genindlæses og giver identiske tal; ingen ArcGIS-kald ud over læsning |
+| Egen lagring af scenarier, layouts og beregninger (D1/R2) | Ingen afhængighed af skriveadgang i ArcGIS |
+| Negative read-only-tests i alle releases | 0 skriveveje mod ArcGIS (UI, browser, server) |
 
 ### Fase 6 — Designer (L) · kortbibliotek efter GP0
 

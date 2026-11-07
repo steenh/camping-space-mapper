@@ -157,7 +157,7 @@ Ethvert layout, uanset om det kommer fra en algoritme, manuel redigering eller i
 | V7 Kantafstand | Afstand til zonegrænse ≥ parameter | Parameter |
 | V8 Tilgængelighed *(senere)* | Hver blok grænser op til et sammenhængende stinet, der når en indgang eller vej | — |
 
-Validatoren producerer en maskinlæsbar rapport, der indgår i snapshot og publicering. Publicering blokeres ved mindst én overtrædelse af V1–V6 (se [Arkitektur §7](DISCOVERY-ARCHITECTURE.md)).
+Validatoren producerer en maskinlæsbar rapport, der indgår i snapshot og eksport. Godkendelse blokeres ved mindst én overtrædelse af V1–V6 (se [Arkitektur §7](DISCOVERY-ARCHITECTURE.md)).
 
 ## 8. Projektion og målenøjagtighed
 
@@ -211,4 +211,4 @@ Vurdering:
 | D5 | Personer pr. plads og tæthedsnorm for fri camping | Personkapacitet | Camping / sikkerhed |
 | D6 | Historiske zoner og faktisk optegnede felter RF22–RF26 | Kalibrering (H3), benchmark | Team GIS |
 | D7 | Hvem godkender kapacitetstal, og hvad "godkendt" betyder formelt | K4 | Campingledelse |
-| D8 | Om lag 835 og `Space_mapping` har nedstrøms forbrugere | Publicering | Team GIS |
+| D8 | Om lag 835 og `Space_mapping` har nedstrøms forbrugere (appen skriver ikke til dem, A9) | Forståelse af eksisterende data | Team GIS |

@@ -89,6 +89,23 @@ test('F04 overlapping zones: no two spaces share ground across zones', t => {
   }
 });
 
+test('KB-01 known limitation: ground in a hole inside an overlap is unused, never double-placed, and flagged', t => {
+  const engine = loadEngine(INDEX);
+  // Zone 0 has a 60×60 m hole; zone 1 covers that hole completely.
+  const zone0 = polygonFeature([[[-150, -100], [150, -100], [150, 100], [-150, 100]], [[-30, -30], [-30, 30], [30, 30], [30, -30]]]);
+  const zone1 = polygonFeature([[[-60, -60], [200, -60], [200, 60], [-60, 60]]]);
+  const zones = [zone0, zone1];
+  const unused = engine.overlapUnusedM2(zones, 1);
+  t.diagnostic(`unused ground flagged for zone 1: ${unused.toFixed(1)} m² (hole is 3600 m²)`);
+  assert.ok(Math.abs(unused - turf.area(polygonFeature([[[-30, -30], [-30, 30], [30, 30], [30, -30]]]))) < 1, 'the hole area must be reported');
+  assert.equal(engine.overlapUnusedM2(zones, 0), 0, 'the earlier zone is not affected');
+  // Conservative: no space of either zone overlaps the other, and none sits in the hole.
+  const spaces = zones.map((z, i) => spacesOf(engine, engine.runPlacement(layerOf(z), 0, 0, 0, P, engine.zoneOverlapExclusions(zones, i)), P));
+  assert.equal(maxIntersection(spaces[0], spaces[1], TOL_M2).countAboveTol, 0);
+  const hole = polygonFeature([[[-30, -30], [-30, 30], [30, 30], [30, -30]]]);
+  assert.equal(maxIntersection([...spaces[0], ...spaces[1]], [hole], TOL_M2).countAboveTol, 0, 'the hole stays empty (understated, not overstated)');
+});
+
 test('F04 gross area is the union, not the sum', t => {
   const engine = loadEngine(INDEX);
   assert.equal(typeof engine.unionAreaM2, 'function', 'unionAreaM2() not implemented');
