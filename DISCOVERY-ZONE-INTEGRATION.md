@@ -157,7 +157,7 @@ Zoneidentitet er en **organisatorisk beslutning** (samme driftsenhed eller campi
 | Regel | GIS (`gis`) | Foreløbig (`foreloebig`) |
 |---|---|---|
 | Kilde | Konfigureret autoritativ zonekilde | Tegnet i appen, GeoJSON-fil, digitaliseret skitse |
-| ID-rum | GIS' `zone_id` | Automatisk præfiks `TMP-` (fx `TMP-WEST-1`). Kan ikke kollidere med GIS-ID'er |
+| ID-rum | GIS' `zone_id` | Automatisk præfiks `TMP-` (fx `TMP-WEST-1`). Kan ikke kollidere med GIS-ID'er. Syntetiske testzoner (prototype) får proveniens `syntetisk` og præfiks `SYN-` og følger samme regler som foreløbige |
 | Højeste kapacitetsstatus | Godkendt (K4) | **Estimat eller Beregnet.** Aldrig Valideret eller Godkendt |
 | Publicering til ArcGIS | Ja, via flowet i [Arkitektur §7](DISCOVERY-ARCHITECTURE.md) | **Aldrig** |
 | Visuelt | Normal udfyldning | Skraveret udfyldning, stiplet kant, mærket **FORELØBIG** på kort, i tabeller og på hvert tal |
@@ -211,6 +211,19 @@ Regler:
 - En parameter uden kilde kan bruges, hvis en navngiven bruger markerer den som **"antagelse — ikke verificeret"**. Tal afledt af den får mærket "Estimat (ubekræftede forudsætninger)", og antagelsen står i forudsætningsskuffen og i alle eksporter.
 - Godkendelse (K4) kræver, at **alle** forudsætninger har kilde. Antagelser blokerer godkendelse.
 
+### 5.1 To slags godkendelse (arkitekturkrav A2)
+
+| | Godkendelse af GIS-zonegeometri | Godkendelse af kapacitetsberegning |
+|---|---|---|
+| Hvad godkendes | At zonens grænse er den gældende for festivalåret | At kapacitetstallene for et scenarie er gældende |
+| Ejer | Team GIS / byplan | Campingledelse (U8) |
+| Hvor det registreres | `zone_status = godkendt` i GIS-laget; læses af appen og fryses i zonesæt-snapshottet | `CapacityApproval` i appen, bundet til ét beregningssnapshot (zonesæt-hash + forudsætninger + motorversion) |
+| Kan appen ændre det? | Nej, kun læse | Ja, af en bruger med godkenderrolle |
+| Afhængighed | Ingen | Kræver, at alle zoner i snapshottet er proveniens `gis` med `zone_status = godkendt` |
+| Ved senere ændring | Nyt zonesæt-snapshot; ændringsdetektion viser forskellen | Den tidligere kapacitetsgodkendelse består uændret, men markeres "zonegrundlag ændret siden godkendelse"; en ny godkendelse kræver et nyt beregningssnapshot |
+
+UI'et viser de to godkendelser som to separate mærker ("Zone: GIS-godkendt 3. feb" og "Kapacitet: godkendt 10. feb, SH"), så de ikke kan forveksles.
+
 ## 6. Versionsstyrede snapshots
 
 ### 6.1 Indhold af et zonesæt-snapshot
@@ -227,7 +240,7 @@ Regler:
 
 ### 6.2 Kanonisk normalisering (forudsætning for stabile hashes)
 
-For at den samme geometri altid giver samme hash, også efter reprojektion eller GIS' omlagring:
+For at den samme geometri altid giver samme hash, også efter reprojektion eller GIS' omlagring. Præcisionsværdierne nedenfor (1 cm, tolerancer) er **startforslag, der testes i prototypetrin P2** (arkitekturkrav A4), før de låses:
 
 1. Reprojicér til EPSG:25832.
 2. Afrund koordinater til 1 cm.

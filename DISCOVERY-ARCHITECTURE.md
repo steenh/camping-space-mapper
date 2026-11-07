@@ -108,6 +108,26 @@ Hypotese **H4**: MapLibre renderer 30.000 pladspolygoner med hover og valg ved �
 | Lager | Intet | **D1**: scenarier, kørsler, godkendelser, audit. **R2**: immutable snapshot-filer (SHA-256-nøgle). KV og Durable Objects er ikke nødvendige |
 | Hemmeligheder | Ingen (PKCE) | Fortsat ingen client secret i klienten. Eventuelle server-hemmeligheder som Worker secrets, aldrig i repo |
 
+### 2.7 Adaptergrænse (arkitekturkrav A1)
+
+Kapacitetsmotoren (`packages/engine`) kender kun **datakontrakten** for zoner ([Zoneintegration §3](DISCOVERY-ZONE-INTEGRATION.md)), ikke ArcGIS. Alle kilder er adaptere med samme grænseflade:
+
+```ts
+interface ZoneSourceAdapter {
+  describe(): Promise<SourceDescription>;          // felter, CRS, antal, sidst ændret
+  load(config: ZoneSourceConfig): Promise<ContractZone[]>; // altid kontrakt-zoner i EPSG:25832
+}
+```
+
+| Adapter | Status |
+|---|---|
+| `SyntheticAdapter` (genererede testzoner) | Første prototype (P3) |
+| `GeoJsonAdapter` (fil efter kontrakten) | Første prototype (P3) |
+| `DrawnAdapter` (tegnet i appen, proveniens `foreloebig`) | Prototype |
+| `ArcGisAdapter` (REST, kun læsning) | P7, når GIS har et testlag |
+
+Motoren må ikke importere ArcGIS-, kort- eller UI-pakker. Det håndhæves med en arkitekturtest i P1. Uden et ArcGIS-lag kan hele kapacitetskæden derfor køres og testes på syntetiske eller GeoJSON-zoner.
+
 ## 3. Reproducerbare snapshots og beregningsversioner
 
 ```mermaid

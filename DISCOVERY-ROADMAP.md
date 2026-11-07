@@ -1,6 +1,6 @@
 # Discovery 6 — Samlet anbefaling og roadmap
 
-> Status: discovery afsluttet; **afventer godkendelse før implementering**
+> Status: discovery godkendt med betingelser 2026-11-07 (se [Beslutningslog](DECISION-LOG.md)). Fase 0 udføres på branch `fase0/sikring`; alt andet afventer de porte, der er beskrevet i §5.
 > Dato: 2026-11-07 · Bygger på [Nuværende tilstand](DISCOVERY-CURRENT-STATE.md), [Geometri og kapacitet](DISCOVERY-GEOMETRY-AND-CAPACITY.md), [Optimering](DISCOVERY-OPTIMIZATION.md), [UX](DISCOVERY-UX-CONCEPTS.md), [Arkitektur](DISCOVERY-ARCHITECTURE.md) og [Zoneintegration](DISCOVERY-ZONE-INTEGRATION.md)
 
 ## 1. Konklusion
@@ -91,65 +91,84 @@ To forhold kræver handling uafhængigt af resten:
 
 ## 5. Prioriteret implementeringsplan med acceptkriterier
 
-Størrelser: **S** = dage, **M** = 1–2 uger, **L** = 3–5 uger (fokuseret udvikling, AI-assisteret). Estimaterne er grove og skal genbesøges efter fase 1.
+> Opdateret 2026-11-07 efter discovery-review. Beslutninger og betingelser: [Beslutningslog](DECISION-LOG.md). Hver leverance er lille og verificerbar; hver **port** (G…) er et stop/go-punkt, hvor arbejdet stopper, indtil du har godkendt.
+
+Størrelser: **S** = dage, **M** = 1–2 uger, **L** = 3–5 uger (fokuseret udvikling, AI-assisteret). Estimaterne er grove.
 
 ```mermaid
 flowchart LR
-  F0["Fase 0 · S<br/>Sikring af nuværende app"] --> F1["Fase 1 · M<br/>Motor + tests + benchmark"]
-  F1 --> F2["Fase 2 · L<br/>Kapacitetsoverblik MVP"]
-  F1 --> F3["Fase 3 · M<br/>Optimering v2 i workers"]
-  F2 --> F4["Fase 4 · M<br/>Scenarier, år, snapshots"]
-  F3 --> F4
-  F4 --> F5["Fase 5 · M<br/>Sikker publicering"]
-  F4 --> F6["Fase 6 · L<br/>Designer (MapLibre)"]
-  F5 --> F7["Fase 7<br/>Udvidelser (O4–O8, DHM)"]
-  F6 --> F7
+  F0["Fase 0 · S<br/>Sikring + benchmark<br/>(fase0/sikring)"] --> G0{{"G0"}}
+  G0 --> F0B["Fase 0B · S<br/>Søgning O1+O2<br/>(egen branch)"] --> G0B{{"G0B"}}
+  G0 --> P0["P0 · S<br/>Spike: kort, ArcGIS,<br/>redigering"] --> GP0{{"GP0<br/>kortvalg"}}
+  GP0 --> P1["P1–P3<br/>Skelet, motor v0,<br/>GeoJSON-import"] --> GP3{{"GP3"}}
+  GP3 --> P4["P4<br/>Første visuelle<br/>overblik"] --> GP4{{"GP4<br/>første testbare<br/>produkt"}}
+  GP4 --> P5["P5–P6<br/>Forudsætninger, K1,<br/>ændringer"] --> GP6{{"GP6"}}
+  GP6 --> P7["P7<br/>ArcGIS-adapter<br/>(læs, testlag)"] --> GP7{{"GP7"}}
+  GP7 --> F3["Fase 3<br/>Optimering v2"] --> F4["Fase 4<br/>Scenarier, år,<br/>godkendelse"]
+  F4 --> F5["Fase 5<br/>Sikker publicering"]
+  F4 --> F6["Fase 6<br/>Designer"]
+  A["Spor A · afklaringer<br/>GIS, sikkerhed, produkter<br/>(B6/B7)"] -.-> GA{{"GA<br/>må sendes?"}}
+  GA -.-> P7
 ```
 
-### Fase 0 — Sikring af den nuværende app (S) · *kræver din godkendelse*
+### Fase 0 — Sikring af den nuværende app (S) · branch `fase0/sikring` · B1, B5
 
-Den nuværende app forbliver i brug, indtil v2 overtager. Den skal derfor være sikker nu.
+Den nuværende app forbliver i brug, indtil den nye overtager. Fase 0 ændrer **ikke** placeringsresultaterne for simple polygoner. Det verificeres med en golden-test mod uændret master.
 
-| Leverance | Acceptkriterier |
-|---|---|
-| Push deaktiveres bag et flag *eller* omskrives til: `confirm` med lagnavn, `rollbackOnFailure=true`, tjek af `addResults`/`deleteResults` pr. feature, backup-download af eksisterende features før sletning | Kan ikke udløses ved ét klik. Delvis fejl rapporteres som fejl. Testet mod et testlag, aldrig produktion |
-| `/arc-proxy` låses til `https`, port 443, eksakte sti-mønstre for `Space_mapping/FeatureServer/0/{addFeatures,deleteFeatures,applyEdits}`; Origin-tjek; CORS kun eget domæne | Kald til andre stier giver 403 (testet). Eksisterende push virker |
-| `/arc-token` låses til eget `client_id` og `grant_type=authorization_code` | Andre bodies giver 400 |
-| MultiPolygon og huller: placering pr. polygondel; blokke må ikke skære indre ringe; guard mod `diag` = ∞ | Probe-tests fra discovery: 0 pladser i hul, ingen hængning |
-| Versionslåste CDN-URL'er med SRI-hashes | Ingen flydende versioner; SRI på alle scripts |
-| `.gitignore` (`.wrangler/`) | — |
-| *Valgfri, anbefalet:* søgefix O1+O2 og fjernelse af "OPTIMAL" | Benchmark (syntetisk) viser ≥ nuværende på alle former |
+| # | Leverance | Acceptkriterier (verificerbare) |
+|---|---|---|
+| 0.1 | Repo-hygiejne: `.gitignore`, `package.json` kun med udviklingsafhængigheder, `npm test` og `npm run bench` | Ren klon: `npm ci && npm test` er grøn. Appen får ingen nye runtime-afhængigheder og intet byggetrin |
+| 0.2 | Benchmark-harness i `bench/` med syntetiske fixtures; baseline genereret fra **uændret** `master` (`859849b`) | Deterministisk (to kørsler giver identisk JSON). Ingen RF-data i repo |
+| 0.3 | Golden-regressionstest | Alle fixtures uden huller, multipolygoner og overlap giver identiske blokke som baseline efter fase 0 |
+| 0.4 | Destruktiv push deaktiveret: kodeflag `false`, funktionen afviser, og UI forklarer og henviser til GeoJSON-eksport | Test bekræfter, at push-stien ikke kan nå `deleteFeatures`. Ingen kald til ArcGIS i tests |
+| 0.5 | `/arc-proxy` og `/arc-token` begrænset: https, standardport, præcis vært, sti-allowlist, POST, samme origin, `client_id`/`grant_type`-allowlist | Unit tests med mocket `fetch`: alle afvisningstilfælde giver 4xx uden udgående kald; tilladte kald videresendes |
+| 0.6 | Kritiske geometrifejl: MultiPolygon (uendelig løkke), huller, overlap mellem zoner, guard mod ikke-endelige værdier; bruttoareal som union | Probe-tests: terminering < 1 s, 0 pladser i huller, målt overlap mellem pladser på tværs af zoner under en tolerance, der testes; arealet viser unionen |
+| 0.7 | Supply chain: versionslåste CDN-URL'er med SRI | Statisk test: ingen flydende versioner, `integrity` på alle eksterne scripts og stylesheets. Appen indlæses i browser uden konsolfejl |
+| 0.8 | Sandfærdighed og småfejl: "OPTIMAL" → "BEST FOUND", escaping af produktnavne, README ajourført | Statisk test + gennemsyn |
+| 0.9 | Lokal browser-røgtest (uden ArcGIS-login og uden skrivning) | Zone indlæses, Calculate, Optimize og eksport virker; MultiPolygon hænger ikke |
 
-### Fase 1 — Fundament: motor, tests og benchmark (M)
+**Port G0:** Du gennemgår rapport og diff. Tre separate beslutninger: (a) merge til `master`, (b) produktionsdeploy, (c) start af fase 0B.
 
-| Leverance | Acceptkriterier |
-|---|---|
-| `packages/engine` i TypeScript: geometry-core (25832, normalisering, validering), capacity (A0–A2, K1), placement (port af greedy/straight), validator V1–V7 | Golden-tests: porten giver *identiske* pladsantal som `index.html` på alle discovery-fixtures, før forbedringer slås til |
-| Benchmark (`npm run bench`) med syntetiske fixtures + første historiske zonesæt (U7) | Deterministisk. Rapport i Markdown/JSON. CI fejler ved overtrædelser eller regression > 0,5 % |
-| Probe-tests for F02–F04, F09 | Alle grønne |
-| Vite + TS + lint + typecheck + CI | Grøn pipeline på hver PR |
+### Fase 0B — Søgeforbedring O1+O2 (S) · egen branch fra `fase0/sikring` · B2
 
-### Fase 2 — Kapacitetsoverblik MVP (L) — *forretningsmålet*
+| # | Leverance | Acceptkriterier |
+|---|---|---|
+| 0B.1 | Søgning 0–180°, kantafledte vinkler, produktperiode-offsets, lokal forfining | Regressionstest: **aldrig færre** pladser end baseline på nogen fixture × produkt × algoritme |
+| 0B.2 | Optimering pr. zone | ≥ fælles vinkel på alle fixtures; gevinst rapporteres |
+| 0B.3 | Tidsbudget | Optimize ≤ 3 s pr. discovery-fixture på main-thread, ellers Web Worker |
 
-| Leverance | Acceptkriterier |
-|---|---|
-| Konfigurerbar zonekilde ([Zoneintegration §2](DISCOVERY-ZONE-INTEGRATION.md)): item-ID/lag-URL, `where`, feltmapping, statusmapping; import med paging og `outSR=25832`; GeoJSON efter samme kontrakt | Et nyt års lag tages i brug uden kodeændring (H9). Hele zonesættet indlæses uanset kortudsnit |
-| Kontraktvalidering ([Zoneintegration §3.5](DISCOVERY-ZONE-INTEGRATION.md)) | Fejl blokerer import; advarsler vises i datakvalitetslisten |
-| Immutable zonesæt-snapshots med kanonisk hash, lokalt (IndexedDB + fil) | Genimport af uændret lag giver identisk hash (H10). Beregninger refererer kun til snapshot-hash |
-| Proveniens `gis` / `foreloebig`: tegnede og skitsebaserede RF27-zoner med `TMP-`-ID, skravering og FORELØBIG-mærke | Foreløbige zoner kan ikke nå status Valideret/Godkendt og kan ikke publiceres (testet). Totaler opdeles efter proveniens |
-| Ændringsdetektion mellem snapshots ([Zoneintegration §7](DISCOVERY-ZONE-INTEGRATION.md)) | Ny/fjernet/uændret/attribut/geometri klassificeres korrekt på testsæt; støj under tolerance giver 0 falske ændringer (H11) |
-| A0 straks; A1/A2/K1 kun med kildehenviste forudsætninger eller navngivne antagelser | Ingen stille standardværdier. Antagelser blokerer godkendelse |
-| Valideringsrapport (topologi, overlap, gab) | H7 bekræftet på RF26 |
-| A0/A1/A2 og K1 pr. zone og site, i m² og ha, personer som interval | Zonetotaler summerer til sitetotal (partition). A0 inden for 0,1 % af ArcGIS (H6) |
-| Overblik: kort-choropleth, KPI-række, kapacitetsvandfald, zonetabel, drill-down site → zone | **Fra zonesæt til fuldt overblik på < 5 min** uden optegning. Alle tal har statusmærke og proveniens |
-| Forudsætningsskuffe med parameterregister og kilder; manglende parametre vises eksplicit | Intet tal vises uden kildehenvist parameter eller tydeligt "mangler"-mærke |
-| Eksport: CSV + PNG/PDF-brief + snapshot-JSON | Genindlæst snapshot giver identiske tal |
+**Port G0B:** Benchmarkrapporten (gevinst, tid) gennemgås. Merge og deploy er separate beslutninger.
+
+### Kapacitetsprototype (P) — tidligt, testbart visuelt produkt · B3, B4, A1–A6
+
+Erstatter den tidligere fase 1 (motor) og fase 2 (overblik). Indholdet er bevaret, men skåret i små trin, så der hurtigt findes noget at se og teste.
+
+| # | Leverance | Acceptkriterier | Port |
+|---|---|---|---|
+| P0 | **Teknisk spike** (B4): (a) MapLibre-rendering af 30.000 polygoner med hover/valg (H4); (b) ArcGIS-adapter-prototype, der læser kontrakt-zoner via REST fra et offentligt eksempellag eller en mock (ingen RF-skrivning); (c) redigering med Terra Draw (tegn, flyt hjørner, snapping) | Spike-rapport med målinger og anbefaling: MapLibre eller ArcGIS Maps SDK | **GP0**: endeligt kortvalg |
+| P1 | Skelet: `packages/engine` (TS, ingen DOM-, React-, MapLibre- eller ArcGIS-afhængighed) + `apps/capacity` (React + Vite), lint, typecheck, tests | Arkitekturtest fejler, hvis `engine` importerer UI- eller ArcGIS-pakker (A1) | — |
+| P2 | Motor v0: normalisering og validering i EPSG:25832; A0 pr. zone og total via union/partition; **snapshot-identitet** (`zoneset_hash`, `geometry_hash`, `engine_version`, `provenance`) fra start (A3); **præcisionsforsøg** (afrunding, tolerancer, reprojektion WGS84↔25832) med dokumenterede resultater, før værdierne låses (A4) | H10 (genimport giver identisk hash); zonetotaler summerer til sitetotal; præcisionsrapport i `bench/` | — |
+| P3 | Syntetisk RF-lignende zonesæt + **GeoJSON-import-adapter** efter datakontrakten med kontraktvalidering; proveniens `syntetisk` / `foreloebig` | Gyldige filer importeres; ugyldige giver forklarende fejl; ingen RF-data i repo | **GP3**: motor og import gennemgået |
+| P4 | **Første visuelle overblik**: kort med zoner (choropleth efter areal), KPI-række (m², ha, antal zoner pr. proveniens), zonetabel synkroniseret med kortet, drill-down site → zone, statusmærker og FORELØBIG-mærkning, lokale snapshots (IndexedDB + download/upload) | Brugertest med dig: fra GeoJSON-fil til overblik på < 2 min; genindlæst snapshot giver identiske tal | **GP4**: første testbare produkt, go/no-go på retning |
+| P5 | Forudsætningsregister (parametre med kilde eller navngiven antagelse), A1/A2/K1-estimat, kapacitetsvandfald | Ingen stille standardværdier; antagelser mærkes og blokerer godkendelse | — |
+| P6 | Ændringsdetektion mellem to snapshots + sammenligningsvisning | Klassifikationen er korrekt på testsæt; 0 falske ændringer ved støj under tolerance (H11) | **GP6** |
+| P7 | ArcGIS-adapter (kun læsning) med konfigurerbar zonekilde (B9) mod et **testlag** | Et nyt lag tages i brug uden kodeændring (H9). Kræver testlag fra GIS og din godkendelse | **GP7** |
+
+Senere trin i samme spor (fra den tidligere fase 2): valideringsrapport for topologi (H7), personer som interval, eksport (CSV, PNG/PDF-brief).
+
+### Spor A — Afklaringer (parallelt) · B6, B7
+
+| # | Leverance | Port |
+|---|---|---|
+| A.1 | Spørgsmålsliste og mødeoplæg til Team GIS (U1, U2, U5, U6, U7, U11–U14), sikkerhed/beredskab (U3) og produktansvarlige (U4) | — |
+| A.2 | Kort, samarbejdsorienteret kravspecifikation til Team GIS (udkast, baseret på [Zoneintegration §9](DISCOVERY-ZONE-INTEGRATION.md)) | **GA**: sendes kun efter din særskilte godkendelse |
 
 ### Fase 3 — Optimering v2 (M)
 
 | Leverance | Acceptkriterier |
 |---|---|
-| O1 + O2 i workerpool med fremdrift og annullering | H1 bekræftet. UI blokeres aldrig > 100 ms |
+| Port af greedy/straight til `packages/engine` | Golden-test: porten giver *identiske* pladsantal som `index.html` på alle `bench/`-fixtures, før forbedringer slås til |
+| O1 + O2 i workerpool med fremdrift og annullering (bygger på fase 0B) | H1 bekræftet. UI blokeres aldrig > 100 ms |
 | Strip-DP (O3) som ny kerne | H2 bekræftet. Ellers beholdes greedy som standard |
 | Rapportering "bedste fundne + grænse + gap" | Intet "optimal" uden bevist gap = 0 inden for en navngiven model |
 | Validator kører på alle resultater | 0 overtrædelser på hele benchmarket |
@@ -162,6 +181,7 @@ Den nuværende app forbliver i brug, indtil v2 overtager. Den skal derfor være 
 | År-matchning (ID + IoU) og dekomponering (areal/model/layout) | Δ-summen af komponenterne = total Δ |
 | Snapshots (zonesæt og beregninger) flyttes fra lokal lagring til R2 + metadata i D1, Cloudflare Access foran appen | Snapshot genberegnet med samme motorversion giver identisk hash og tal |
 | Statusflow Estimeret → Beregnet → Valideret → Godkendt | Godkendte tal kan ikke ændres, kun erstattes af et nyt snapshot |
+| To adskilte godkendelser (A2): GIS-zonegeometri (`zone_status`, ejes af GIS, læses fra kilden) og kapacitetsberegning (`CapacityApproval`, ejes af campingledelsen, bundet til beregningssnapshot) | En kapacitetsgodkendelse kræver, at alle zoner i snapshottet er `gis` + `godkendt`; en ændret GIS-godkendelse ophæver ikke en tidligere kapacitetsgodkendelse, men markerer den "zonegrundlag ændret" (testet) |
 
 ### Fase 5 — Sikker publicering (M)
 
@@ -169,26 +189,28 @@ Den nuværende app forbliver i brug, indtil v2 overtager. Den skal derfor være 
 |---|---|
 | Publiceringsflow pr. [Arkitektur §7](DISCOVERY-ARCHITECTURE.md) | P1–P10 opfyldt og testet mod testlag. Produktionsskrivning kun efter godkendelse fra Team GIS |
 
-### Fase 6 — Designer på MapLibre (L)
+### Fase 6 — Designer (L) · kortbibliotek efter GP0
 
 | Leverance | Acceptkriterier |
 |---|---|
-| MapLibre + Terra Draw, semantisk zoom, låste blokke, manuel redigering med løbende validering, alternativer (Pareto) | H4 bekræftet. BR2 kan gennemføres uden at forlade kortet. Den gamle app kan pensioneres (funktionsparitet-tjekliste) |
+| Kortbibliotek valgt i GP0 + Terra Draw, semantisk zoom, låste blokke, manuel redigering med løbende validering, alternativer (Pareto) | H4 bekræftet. BR2 kan gennemføres uden at forlade kortet. Den gamle app kan pensioneres (funktionsparitet-tjekliste) |
 
 ### Fase 7 — Udvidelser (efter behov)
 
 O4 (flere rotationer pr. zone, kun hvis H8 holder), O5 (LNS), O6 (ILP-orakel i CI), O8 (multikriterie inkl. V8-tilgængelighed), hældningsanalyse fra Danmarks Højdemodel, integration med Camping Portal og `products.yml`.
 
-## 6. Beslutninger, der afventer dig
+## 6. Beslutninger
 
-| # | Beslutning | Anbefaling |
-|---|---|---|
-| B1 | Godkend fase 0 (ændringer i den nuværende app og proxy). Skal push deaktiveres helt eller hærdes? | Deaktivér push nu, og genindfør den først via fase 5. Hærd proxy og ret geometrifejl |
-| B2 | Skal søgefixet (O1+O2) laves i den nuværende app allerede i fase 0? | Ja. Lille indsats, målt gevinst, appen bruges indtil v2 |
-| B3 | UI-framework | React + TS (Svelte 5 som alternativ) |
-| B4 | MapLibre vs. ArcGIS Maps SDK | MapLibre, med forbehold for U5 |
-| B5 | Må benchmark-harness og fixtures fra discovery lægges i repoet (`bench/`)? | Ja. De er grundlaget for alle videre beslutninger |
-| B6 | Hvem skal bidrage til U1–U14 (Team GIS, sikkerhed, produktansvarlige)? | Kort afklaringsmøde med Team GIS først (U1, U2, U5, U6, U7, U12–U14) |
-| B7 | Må kravene i [Zoneintegration §9](DISCOVERY-ZONE-INTEGRATION.md) sendes til Team GIS som udgangspunkt for zonelaget, før det etableres? | Ja, så hurtigt som muligt. Det er billigere at aftale nu end at reparere bagefter |
-| B8 | Hvordan bliver RF27-skitserne til foreløbige zoner: GIS digitaliserer som kladder (A), planlægger tegner i appen (B), eller georefereret billedoverlay (C)? | A, hvis GIS har kapacitet. Ellers B. C kun hvis skitserne er målfaste (U11) |
-| B9 | Ét zonelag pr. år eller ét fælles lag med `festival_year`? | Lad GIS vælge; konfigurationen understøtter begge |
+Afgjort 2026-11-07; detaljer, betingelser og arkitekturkrav A1–A8 står i [Beslutningslog](DECISION-LOG.md).
+
+| # | Spørgsmål (discovery) | Anbefaling (discovery) | Beslutning |
+|---|---|---|---|
+| B1 | Godkend fase 0. Skal push deaktiveres helt eller hærdes? | Deaktivér push nu; hærd proxy; ret geometrifejl | **GO**. Ingen produktionsdeploy uden særskilt godkendelse |
+| B2 | Søgefix O1+O2 i den nuværende app? | Ja | **Betinget GO**: separat branch med benchmark og regressionstest; ingen produktionsdeploy |
+| B3 | UI-framework | React + TS | **GO**: React + TS med framework-uafhængig motor |
+| B4 | MapLibre vs. ArcGIS Maps SDK | MapLibre, med forbehold for U5 | **Betinget GO**: MapLibre foretrukket; teknisk spike (P0) før endeligt valg |
+| B5 | Benchmark og fixtures i repo? | Ja | **GO**. Ingen følsomme RF-data i offentligt repo |
+| B6 | Hvem bidrager til U1–U14? | Møde med Team GIS først | **GO**: forbered afklaringer (spor A) |
+| B7 | Må kravene til Team GIS sendes? | Ja, hurtigt | **GO** til udarbejdelse; **må ikke sendes** uden særskilt godkendelse (port GA) |
+| B8 | RF27-skitser → foreløbige zoner | A (GIS digitaliserer), ellers B | **GO**: GIS-digitalisering foretrækkes; manuel optegning bevares; begge er foreløbige |
+| B9 | Årligt eller fælles zonelag | Understøt begge | **GO**: understøt begge |
