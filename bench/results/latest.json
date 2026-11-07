@@ -1,0 +1,290 @@
+{
+ "source": "index.html",
+ "search": "18 angles (0–85°, step 5) × offsets X[0,17,34] × Y[0,8,16]",
+ "fixtures": [
+  {
+   "shape": "A_rect_300x200",
+   "product": "GAP_5x10",
+   "area_m2_geodesic": 59993,
+   "lattice_reference": 873,
+   "greedy": {
+    "spaces": 826,
+    "angle": 85,
+    "offX": 0,
+    "offY": 0,
+    "runs": 162,
+    "pct_of_lattice": 94.6
+   },
+   "straight": {
+    "spaces": 764,
+    "angle": 0,
+    "offX": 34,
+    "offY": 8,
+    "runs": 162,
+    "pct_of_lattice": 87.5
+   }
+  },
+  {
+   "shape": "A_rect_300x200",
+   "product": "SYN_6x8",
+   "area_m2_geodesic": 59993,
+   "lattice_reference": 547,
+   "greedy": {
+    "spaces": 517,
+    "angle": 60,
+    "offX": 34,
+    "offY": 8,
+    "runs": 162,
+    "pct_of_lattice": 94.5
+   },
+   "straight": {
+    "spaces": 512,
+    "angle": 0,
+    "offX": 0,
+    "offY": 0,
+    "runs": 162,
+    "pct_of_lattice": 93.6
+   }
+  },
+  {
+   "shape": "B_rect_rot23",
+   "product": "GAP_5x10",
+   "area_m2_geodesic": 59993,
+   "lattice_reference": 873,
+   "greedy": {
+    "spaces": 864,
+    "angle": 20,
+    "offX": 0,
+    "offY": 0,
+    "runs": 162,
+    "pct_of_lattice": 99
+   },
+   "straight": {
+    "spaces": 864,
+    "angle": 20,
+    "offX": 0,
+    "offY": 0,
+    "runs": 162,
+    "pct_of_lattice": 99
+   }
+  },
+  {
+   "shape": "B_rect_rot23",
+   "product": "SYN_6x8",
+   "area_m2_geodesic": 59993,
+   "lattice_reference": 547,
+   "greedy": {
+    "spaces": 532,
+    "angle": 20,
+    "offX": 34,
+    "offY": 0,
+    "runs": 162,
+    "pct_of_lattice": 97.3
+   },
+   "straight": {
+    "spaces": 532,
+    "angle": 20,
+    "offX": 34,
+    "offY": 0,
+    "runs": 162,
+    "pct_of_lattice": 97.3
+   }
+  },
+  {
+   "shape": "C_L_shape",
+   "product": "GAP_5x10",
+   "area_m2_geodesic": 44995,
+   "lattice_reference": 654,
+   "greedy": {
+    "spaces": 624,
+    "angle": 85,
+    "offX": 0,
+    "offY": 8,
+    "runs": 162,
+    "pct_of_lattice": 95.4
+   },
+   "straight": {
+    "spaces": 563,
+    "angle": 0,
+    "offX": 0,
+    "offY": 16,
+    "runs": 162,
+    "pct_of_lattice": 86.1
+   }
+  },
+  {
+   "shape": "C_L_shape",
+   "product": "SYN_6x8",
+   "area_m2_geodesic": 44995,
+   "lattice_reference": 410,
+   "greedy": {
+    "spaces": 381,
+    "angle": 85,
+    "offX": 17,
+    "offY": 16,
+    "runs": 162,
+    "pct_of_lattice": 92.9
+   },
+   "straight": {
+    "spaces": 375,
+    "angle": 0,
+    "offX": 0,
+    "offY": 8,
+    "runs": 162,
+    "pct_of_lattice": 91.5
+   }
+  },
+  {
+   "shape": "D_irregular",
+   "product": "GAP_5x10",
+   "area_m2_geodesic": 79590,
+   "lattice_reference": 1158,
+   "greedy": {
+    "spaces": 1065,
+    "angle": 65,
+    "offX": 17,
+    "offY": 16,
+    "runs": 162,
+    "pct_of_lattice": 92
+   },
+   "straight": {
+    "spaces": 997,
+    "angle": 25,
+    "offX": 34,
+    "offY": 8,
+    "runs": 162,
+    "pct_of_lattice": 86.1
+   }
+  },
+  {
+   "shape": "D_irregular",
+   "product": "SYN_6x8",
+   "area_m2_geodesic": 79590,
+   "lattice_reference": 726,
+   "greedy": {
+    "spaces": 695,
+    "angle": 70,
+    "offX": 17,
+    "offY": 8,
+    "runs": 162,
+    "pct_of_lattice": 95.7
+   },
+   "straight": {
+    "spaces": 651,
+    "angle": 20,
+    "offX": 34,
+    "offY": 16,
+    "runs": 162,
+    "pct_of_lattice": 89.7
+   }
+  },
+  {
+   "shape": "E_strip_62x400",
+   "product": "GAP_5x10",
+   "area_m2_geodesic": 24797,
+   "lattice_reference": 361,
+   "greedy": {
+    "spaces": 326,
+    "angle": 0,
+    "offX": 34,
+    "offY": 8,
+    "runs": 162,
+    "pct_of_lattice": 90.3
+   },
+   "straight": {
+    "spaces": 284,
+    "angle": 85,
+    "offX": 34,
+    "offY": 0,
+    "runs": 162,
+    "pct_of_lattice": 78.7
+   }
+  },
+  {
+   "shape": "E_strip_62x400",
+   "product": "SYN_6x8",
+   "area_m2_geodesic": 24797,
+   "lattice_reference": 226,
+   "greedy": {
+    "spaces": 204,
+    "angle": 0,
+    "offX": 0,
+    "offY": 0,
+    "runs": 162,
+    "pct_of_lattice": 90.3
+   },
+   "straight": {
+    "spaces": 198,
+    "angle": 85,
+    "offX": 17,
+    "offY": 16,
+    "runs": 162,
+    "pct_of_lattice": 87.6
+   }
+  },
+  {
+   "shape": "F_trapezoid",
+   "product": "GAP_5x10",
+   "area_m2_geodesic": 46744,
+   "lattice_reference": 680,
+   "greedy": {
+    "spaces": 622,
+    "angle": 85,
+    "offX": 0,
+    "offY": 16,
+    "runs": 162,
+    "pct_of_lattice": 91.5
+   },
+   "straight": {
+    "spaces": 587,
+    "angle": 85,
+    "offX": 0,
+    "offY": 16,
+    "runs": 162,
+    "pct_of_lattice": 86.3
+   }
+  },
+  {
+   "shape": "F_trapezoid",
+   "product": "SYN_6x8",
+   "area_m2_geodesic": 46744,
+   "lattice_reference": 426,
+   "greedy": {
+    "spaces": 402,
+    "angle": 85,
+    "offX": 0,
+    "offY": 16,
+    "runs": 162,
+    "pct_of_lattice": 94.4
+   },
+   "straight": {
+    "spaces": 370,
+    "angle": 5,
+    "offX": 17,
+    "offY": 8,
+    "runs": 162,
+    "pct_of_lattice": 86.9
+   }
+  }
+ ],
+ "probes": {
+  "hole": {
+   "spaces": 695,
+   "spaces_intersecting_hole": 0
+  },
+  "multipolygon": {
+   "spaces": 253,
+   "terminates": true
+  },
+  "overlap": {
+   "spaces": [
+    539,
+    411
+   ],
+   "overlapping_pairs": 0,
+   "max_overlap_m2": 0,
+   "sum_area_m2": 79797,
+   "shown_area_m2": 69822
+  }
+ }
+}

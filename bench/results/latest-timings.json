@@ -1,0 +1,77 @@
+{
+ "node": "v25.6.1",
+ "fixtures": [
+  {
+   "shape": "A_rect_300x200",
+   "product": "GAP_5x10",
+   "greedy_ms": 186,
+   "straight_ms": 127
+  },
+  {
+   "shape": "A_rect_300x200",
+   "product": "SYN_6x8",
+   "greedy_ms": 51,
+   "straight_ms": 83
+  },
+  {
+   "shape": "B_rect_rot23",
+   "product": "GAP_5x10",
+   "greedy_ms": 316,
+   "straight_ms": 181
+  },
+  {
+   "shape": "B_rect_rot23",
+   "product": "SYN_6x8",
+   "greedy_ms": 87,
+   "straight_ms": 121
+  },
+  {
+   "shape": "C_L_shape",
+   "product": "GAP_5x10",
+   "greedy_ms": 214,
+   "straight_ms": 145
+  },
+  {
+   "shape": "C_L_shape",
+   "product": "SYN_6x8",
+   "greedy_ms": 60,
+   "straight_ms": 103
+  },
+  {
+   "shape": "D_irregular",
+   "product": "GAP_5x10",
+   "greedy_ms": 483,
+   "straight_ms": 276
+  },
+  {
+   "shape": "D_irregular",
+   "product": "SYN_6x8",
+   "greedy_ms": 134,
+   "straight_ms": 189
+  },
+  {
+   "shape": "E_strip_62x400",
+   "product": "GAP_5x10",
+   "greedy_ms": 260,
+   "straight_ms": 158
+  },
+  {
+   "shape": "E_strip_62x400",
+   "product": "SYN_6x8",
+   "greedy_ms": 72,
+   "straight_ms": 109
+  },
+  {
+   "shape": "F_trapezoid",
+   "product": "GAP_5x10",
+   "greedy_ms": 262,
+   "straight_ms": 182
+  },
+  {
+   "shape": "F_trapezoid",
+   "product": "SYN_6x8",
+   "greedy_ms": 74,
+   "straight_ms": 132
+  }
+ ]
+}
