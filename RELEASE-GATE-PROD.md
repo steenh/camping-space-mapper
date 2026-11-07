@@ -8,14 +8,16 @@
 
 | # | Forudsætning | Hvorfor | Status |
 |---|---|---|---|
-| F1 | **Produktionens deploy-vej er kendt.** `pladser.campops.net` ligger ikke i den personlige Cloudflare-konto. Er projektet koblet til GitHub (automatisk deploy ved push til `master`), deployes manuelt med wrangler, eller på anden måde? | Hvis Pages er Git-koblet til `origin/master`, **er en merge til master det samme som en produktionsdeploy**. Det er ikke godkendt | ❓ Ukendt; skal afklares før G0-a |
+| F1 | **Produktionens deploy-vej er kendt.** `pladser.campops.net` ligger ikke i den personlige Cloudflare-konto. Er projektet koblet til GitHub (automatisk deploy ved push til `master`), deployes manuelt med wrangler, eller på anden måde? | Hvis Pages er Git-koblet til `origin/master`, **er en merge til master det samme som en produktionsdeploy**. Det er ikke godkendt | ✅ **Afklaret 2026-11-07 (læsning via `campops-cf-deploy`): Git-koblet.** Pages-projekt `camping-space-mapper` (domæner `camping-space-mapper.pages.dev`, `pladser.campops.net`), kilde GitHub `steenh/camping-space-mapper`, production branch `master`, produktionsdeploys slået til, preview-deploys for **alle** branches. Seneste produktionsdeploy `fc5d1c3a` (2026-11-07 11:42 UTC) udløst af `github:push` af `dbf2580`. Ingen miljøvariabler i produktion. **Konsekvens: merge til `origin/master` = produktionsdeploy** |
 | F2 | Login-test (vej A) bestået | Krav fra G0 | ⏳ Afventer |
 | F3 | Merge-kandidaten = `origin/master` + `fase0/sikring`, uden O1+O2 | Krav fra G0-a | ⏳ |
 | F4 | `npm ci && npm test` og `CSM_NETWORK=1 npm test` grønne på præcis den commit, der deployes | Regression og SRI | ⏳ |
 
-Hvis F1 viser automatisk deploy ved merge, er der to sikre muligheder:
+F1 viser automatisk deploy ved merge. Der er to sikre muligheder:
 - Afbryd Git-integrationen midlertidigt (eller sæt production branch til en anden branch), før der merges.
 - Behandl G0-a og G0-c som én samlet beslutning.
+
+**Yderligere konsekvens af F1:** Fordi preview-deploys er slået til for alle branches, giver et push af *enhver* branch til GitHub en offentligt tilgængelig preview på `<branch>.camping-space-mapper.pages.dev` (ukendt om den er bag Cloudflare Access). Fase 0-, 0B- og preview-branches må derfor ikke pushes, før det er afklaret.
 
 ## 1. Artefakt
 
