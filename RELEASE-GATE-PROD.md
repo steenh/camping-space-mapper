@@ -9,7 +9,7 @@
 | # | Forudsætning | Hvorfor | Status |
 |---|---|---|---|
 | F1 | **Produktionens deploy-vej er kendt.** `pladser.campops.net` ligger ikke i den personlige Cloudflare-konto. Er projektet koblet til GitHub (automatisk deploy ved push til `master`), deployes manuelt med wrangler, eller på anden måde? | Hvis Pages er Git-koblet til `origin/master`, **er en merge til master det samme som en produktionsdeploy**. Det er ikke godkendt | ✅ **Afklaret 2026-11-07 (læsning via `campops-cf-deploy`): Git-koblet.** Pages-projekt `camping-space-mapper` (domæner `camping-space-mapper.pages.dev`, `pladser.campops.net`), kilde GitHub `steenh/camping-space-mapper`, production branch `master`, produktionsdeploys slået til, preview-deploys for **alle** branches. Seneste produktionsdeploy `fc5d1c3a` (2026-11-07 11:42 UTC) udløst af `github:push` af `dbf2580`. Ingen miljøvariabler i produktion. **Konsekvens: merge til `origin/master` = produktionsdeploy** |
-| F2 | Login-test (vej A) bestået | Krav fra G0 | ⏳ Afventer |
+| F2 | Login-test (vej A) bestået | Krav fra G0 | ✅ Bestået 2026-11-07 (L1–L9, se G0-LOGIN-TEST.md) |
 | F3 | Merge-kandidaten = `origin/master` + `fase0/sikring`, uden O1+O2 | Krav fra G0-a | ⏳ |
 | F4 | `npm ci && npm test` og `CSM_NETWORK=1 npm test` grønne på præcis den commit, der deployes | Regression og SRI | ⏳ |
 
