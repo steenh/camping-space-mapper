@@ -4,8 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Camping Space Mapper</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+  <!-- Exact versions with Subresource Integrity: a changed file on the CDN is refused by the browser. -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"
+        integrity="sha384-NZLkVuBRMEeB4VeZz27WwTRvlhec30biQ8Xx7zG7JJnkvEKRg5qi6BNbEXo9ydwv" crossorigin="anonymous" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', Arial, sans-serif; display: flex; height: 100vh; overflow: hidden; background: #0f172a; }
@@ -388,7 +391,7 @@
       </div>
       <div class="instruction-step">
         <div class="step-num">6</div>
-        <div class="step-text"><strong>Export</strong> the result as GeoJSON or push directly to an ArcGIS feature layer via the Export / Sync section</div>
+        <div class="step-text"><strong>Export</strong> the result as GeoJSON via the Export / Sync section (direct push to ArcGIS is disabled in this version)</div>
       </div>
       <div class="instruction-step">
         <div class="step-num">7</div>
@@ -485,7 +488,7 @@
     </div>
 
     <div class="section">
-      <div class="section-title">Results <span id="optimal-badge">OPTIMAL</span></div>
+      <div class="section-title">Results <span id="optimal-badge" title="Best layout among the rotations and offsets tried — not a proven optimum">BEST FOUND</span></div>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-card-label">Total spaces</div>
@@ -496,7 +499,7 @@
           <div class="stat-card-value neutral" id="totalBlocks">—</div>
         </div>
         <div class="stat-card">
-          <div class="stat-card-label">Area (m²)</div>
+          <div class="stat-card-label" title="Union of all drawn areas: overlaps are counted once">Gross area (m²)</div>
           <div class="stat-card-value neutral" id="totalArea">—</div>
         </div>
         <div class="stat-card">
@@ -521,6 +524,7 @@
       <div class="btn-row" style="margin-bottom:10px;">
         <button class="btn btn-secondary" onclick="exportGeoJSON()">Download GeoJSON</button>
       </div>
+      <p id="arcPushDisabledNote" style="font-size:0.7rem;color:#94a3b8;">Direct push to ArcGIS is disabled in this version (it replaced the whole target layer). Download GeoJSON and hand the file to Team GIS.</p>
       <div id="arcSyncArea" style="display:none;">
         <div class="field" style="margin-bottom:8px;">
           <label>Target layer</label>
@@ -611,17 +615,22 @@
           <input type="color" id="pColor" value="#4ade80" />
         </div>
       </div>
-      <div class="btn-row" style="margin-top:16px;">
+      <div id="pError" style="font-size:0.72rem;color:#f87171;min-height:1em;margin-top:8px;"></div>
+      <div class="btn-row" style="margin-top:8px;">
         <button class="btn btn-primary" onclick="saveProduct()">Save</button>
         <button class="btn btn-secondary" onclick="closeProductModal()">Cancel</button>
       </div>
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
-  <script src="https://unpkg.com/esri-leaflet@3/dist/esri-leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"
+          integrity="sha384-JP5UPxIO2Tm2o79Fb0tGYMa44jkWar53aBoCbd8ah0+LcCDoohTIYr+zIXyfGIJN" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"
+          integrity="sha384-82q0nm29xZzIo5BMtDYnh2/NxeO6FoaK1S/0nF84w3cEsqbBfun3JdMyDVYWfVY5" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/esri-leaflet@3.0.19/dist/esri-leaflet.js"
+          integrity="sha384-2EpnechKmjshAhcJgZr0/dexkJdbcRJm+qsQtCjFsfBP/u5HZmrSa9lpmD7u2t5T" crossorigin="anonymous"></script>
   <script>
     // ── ArcGIS configuration ──────────────────────────────────────────────────
     const ARCGIS_CLIENT_ID  = 'wDfGolINXTr1cgFD'; // replace with your ArcGIS app client ID
@@ -630,6 +639,11 @@
 
     const ARC_DEFAULT_STYLE  = { color: '#f97316', fillColor: '#f97316', fillOpacity: 0.2, weight: 1.5 };
     const ARC_SELECTED_STYLE = { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.5, weight: 2.5 };
+
+    // Destructive "replace" push (deleteFeatures where 1=1 + addFeatures) is disabled
+    // (DECISION-LOG B1). It returns only via a validated, approved, reversible publishing
+    // flow (DISCOVERY-ARCHITECTURE §7). The /arc-proxy function is closed by default too.
+    const ENABLE_ARCGIS_PUSH = false;
 
     // ── Product types ─────────────────────────────────────────────────────────
     let nextProductId = 2;
@@ -715,7 +729,8 @@
     let exclusionDrawHandler = null;
 
     function updateAreaDisplay() {
-      const total = drawnPolygons.reduce((s, p) => s + turf.area(p.toGeoJSON()), 0);
+      // Union, not sum: overlapping areas are counted once.
+      const total = unionAreaM2(drawnPolygons.map(p => p.toGeoJSON()));
       document.getElementById('totalArea').textContent = Math.round(total).toLocaleString('nl-NL');
     }
 
@@ -816,6 +831,70 @@
       return [cLat + y / f.mPerLat, cLng + x / f.mPerLng];
     }
 
+    // ── Zone geometry helpers ─────────────────────────────────────────────────
+    // Zones may be Polygons with holes or MultiPolygons (e.g. a concave hull of
+    // separated feature clusters). Returns [{ outer, holes }] with closed
+    // [lng, lat] rings; empty for anything else.
+    function zoneParts(geo) {
+      const g = geo && geo.geometry;
+      if (!g) return [];
+      const polys = g.type === 'Polygon' ? [g.coordinates]
+                  : g.type === 'MultiPolygon' ? g.coordinates : [];
+      return polys
+        .filter(p => Array.isArray(p) && p.length > 0 && Array.isArray(p[0]) && p[0].length >= 4)
+        .map(p => ({ outer: p[0], holes: p.slice(1).filter(r => Array.isArray(r) && r.length >= 4) }));
+    }
+
+    function ringToLocal(ring, cLat, cLng, f) {
+      return ring.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
+    }
+
+    // Drawn exclusion zones plus extra [lng, lat] rings (e.g. overlap with other zones), in local metres.
+    function exclusionLocalsFor(extraRings, cLat, cLng, f) {
+      return drawnExclusions
+        .map(exclLayer => ringToLocal(exclLayer.toGeoJSON().geometry.coordinates[0], cLat, cLng, f))
+        .concat((extraRings || []).map(r => ringToLocal(r, cLat, cLng, f)));
+    }
+
+    // A product that would make the sweep loops stall or misbehave is rejected up front.
+    function isValidProduct(p) {
+      const pos = v => typeof v === 'number' && Number.isFinite(v) && v > 0;
+      const nonNeg = v => v === undefined || (typeof v === 'number' && Number.isFinite(v) && v >= 0);
+      const count = v => Number.isInteger(v) && v >= 1;
+      return !!p && pos(p.spaceW) && pos(p.spaceH) && count(p.maxCols) && count(p.maxRows)
+        && typeof p.pathW === 'number' && Number.isFinite(p.pathW) && p.pathW >= 0 && nonNeg(p.spaceGap);
+    }
+
+    // Overlap between zone `index` and every lower-indexed zone, as [lng, lat] outer rings.
+    // Used as extra exclusions so two zones never place spaces on the same ground: the
+    // lower-indexed zone keeps the overlap. If an intersection cannot be computed, the
+    // whole earlier zone is excluded instead (conservative: may lose spaces, never overlaps).
+    function zoneOverlapExclusions(zoneGeos, index) {
+      const rings = [];
+      for (let j = 0; j < index; j++) {
+        let inter;
+        try { inter = turf.intersect(zoneGeos[index], zoneGeos[j]); }
+        catch (_) { inter = undefined; }
+        if (inter === null) continue;
+        const source = inter === undefined ? zoneGeos[j] : inter;
+        for (const part of zoneParts(source)) rings.push(part.outer);
+      }
+      return rings;
+    }
+
+    // Gross area of all zones without double counting overlaps (m²).
+    function unionAreaM2(zoneGeos) {
+      if (zoneGeos.length === 0) return 0;
+      try {
+        let u = zoneGeos[0];
+        for (let i = 1; i < zoneGeos.length; i++) u = turf.union(u, zoneGeos[i]) || u;
+        return turf.area(u);
+      } catch (err) {
+        console.warn('Union failed, falling back to sum of zone areas:', err);
+        return zoneGeos.reduce((s, g) => s + turf.area(g), 0);
+      }
+    }
+
     // ── Geometry helpers ──────────────────────────────────────────────────────
     // Block corners — w = block width (m), h = block height (m)
     function blockCorners(ox, oy, w, h, rad) {
@@ -910,23 +989,36 @@
     // then (nrows=1, ncols=10→1) so 2-row groups are always preferred but
     // 1-row groups fill spots where 2-row ones don't fit.
     // The Y step after each row equals the tallest block placed + 5 m path.
-    function runPlacement(polygon, angleDeg, offX, offY, product) {
+    //
+    // Runs once per polygon part of the zone (MultiPolygon support); holes are
+    // treated as obstacles. extraExclusions: [lng, lat] rings, e.g. overlaps
+    // with other zones (see zoneOverlapExclusions).
+    function runPlacement(polygon, angleDeg, offX, offY, product, extraExclusions) {
+      const rad = angleDeg * Math.PI / 180;
+      const geo = polygon.toGeoJSON();
+      const parts = zoneParts(geo);
+      if (parts.length === 0 || !isValidProduct(product)) {
+        return { blocks: [], rad, cLat: 0, cLng: 0, f: getFactors(0) };
+      }
+      const cent = turf.centroid(geo).geometry.coordinates;
+      const cLng = cent[0], cLat = cent[1];
+      const f = getFactors(cLat);
+      const exclusionLocals = exclusionLocalsFor(extraExclusions, cLat, cLng, f);
+
+      const blocks = [];
+      for (const part of parts) {
+        const polyLocal = ringToLocal(part.outer, cLat, cLng, f);
+        const obstacles = exclusionLocals.concat(part.holes.map(h => ringToLocal(h, cLat, cLng, f)));
+        placeGreedyInPart(polyLocal, obstacles, angleDeg, offX, offY, product, blocks);
+      }
+      return { blocks, rad, cLat, cLng, f };
+    }
+
+    function placeGreedyInPart(polyLocal, exclusionLocals, angleDeg, offX, offY, product, blocks) {
       const { spaceW, spaceH, maxCols, maxRows, pathW } = product;
       const spaceGap = product.spaceGap || 0;
       const stepW = spaceW + spaceGap;
       const stepH = spaceH + spaceGap;
-      const geo = polygon.toGeoJSON();
-      const cent = turf.centroid(geo).geometry.coordinates;
-      const cLng = cent[0], cLat = cent[1];
-      const f = getFactors(cLat);
-
-      const rawCoords = geo.geometry.coordinates[0];
-      const polyLocal = rawCoords.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
-
-      const exclusionLocals = drawnExclusions.map(exclLayer => {
-        const ec = exclLayer.toGeoJSON().geometry.coordinates[0];
-        return ec.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
-      });
 
       const xs = polyLocal.map(c => c.x), ys = polyLocal.map(c => c.y);
       const minX = Math.min(...xs), maxX = Math.max(...xs);
@@ -939,9 +1031,9 @@
       const uy = { x: -sin, y: cos };
 
       const diag = Math.sqrt(polyW * polyW + polyH * polyH) + 100;
+      if (polyLocal.length < 3 || !Number.isFinite(diag)) return;
       const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
 
-      const blocks = [];
       let rowDist = -diag / 2 + offY;
 
       while (rowDist < diag / 2) {
@@ -975,8 +1067,6 @@
 
         rowDist += rowMaxH > 0 ? rowMaxH + pathW : stepH;
       }
-
-      return { blocks, rad, cLat, cLng, f };
     }
 
     // ── Straight-paths placement ──────────────────────────────────────────────
@@ -987,25 +1077,37 @@
     // After choosing bestN for a slot the next slot starts bestN×5 + 5 m later
     // (actual block width + path), not the maximum possible 55 m. This packs
     // narrower columns tighter and naturally adapts to irregular polygon shapes.
-    function runPlacementStraight(polygon, angleDeg, offX, offY, product) {
+    //
+    // Runs once per polygon part; holes are obstacles in phase 2 (like
+    // exclusion zones, they are not considered when sizing column slots).
+    function runPlacementStraight(polygon, angleDeg, offX, offY, product, extraExclusions) {
+      const rad = angleDeg * Math.PI / 180;
+      const geo = polygon.toGeoJSON();
+      const parts = zoneParts(geo);
+      if (parts.length === 0 || !isValidProduct(product)) {
+        return { blocks: [], rad, cLat: 0, cLng: 0, f: getFactors(0) };
+      }
+      const cent = turf.centroid(geo).geometry.coordinates;
+      const cLng = cent[0], cLat = cent[1];
+      const f = getFactors(cLat);
+      const exclusionLocals = exclusionLocalsFor(extraExclusions, cLat, cLng, f);
+
+      const blocks = [];
+      for (const part of parts) {
+        const polyLocal = ringToLocal(part.outer, cLat, cLng, f);
+        const obstacles = exclusionLocals.concat(part.holes.map(h => ringToLocal(h, cLat, cLng, f)));
+        placeStraightInPart(polyLocal, obstacles, angleDeg, offX, offY, product, blocks);
+      }
+      return { blocks, rad, cLat, cLng, f };
+    }
+
+    function placeStraightInPart(polyLocal, exclusionLocals, angleDeg, offX, offY, product, blocks) {
       const { spaceW, spaceH, maxCols, maxRows, pathW } = product;
       const spaceGap = product.spaceGap || 0;
       const stepW = spaceW + spaceGap;
       const stepH = spaceH + spaceGap;
       const blockH = maxRows * stepH - spaceGap;
       const stepY  = blockH + pathW;
-      const geo = polygon.toGeoJSON();
-      const cent = turf.centroid(geo).geometry.coordinates;
-      const cLng = cent[0], cLat = cent[1];
-      const f = getFactors(cLat);
-
-      const rawCoords = geo.geometry.coordinates[0];
-      const polyLocal = rawCoords.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
-
-      const exclusionLocals = drawnExclusions.map(exclLayer => {
-        const ec = exclLayer.toGeoJSON().geometry.coordinates[0];
-        return ec.slice(0, -1).map(([lng, lat]) => toLocal(lat, lng, cLat, cLng, f));
-      });
 
       const xs = polyLocal.map(c => c.x), ys = polyLocal.map(c => c.y);
       const minX = Math.min(...xs), maxX = Math.max(...xs);
@@ -1018,6 +1120,7 @@
       const uy = { x: -sin, y: cos };
 
       const diag = Math.sqrt(polyW * polyW + polyH * polyH) + 100;
+      if (polyLocal.length < 3 || !Number.isFinite(diag)) return;
       const nRows = Math.ceil(diag / stepY) + 4;
       const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
 
@@ -1066,7 +1169,6 @@
       }
 
       // ── Phase 2: adaptive Y sweep per column slot ────────────────────────
-      const blocks = [];
       for (const { xDist, bestN } of colData) {
         let rowDist = -diag / 2 + offY;
         const maxRowSteps = Math.ceil(diag / stepH) + 10;
@@ -1090,9 +1192,10 @@
           if (!placed) rowDist += stepH;
         }
       }
-
-      return { blocks, rad, cLat, cLng, f };
     }
+
+    // @bench-extract-end — everything above (from "Coordinate helpers") is pure
+    // geometry/placement code that bench/ and tests/ load into Node.
 
     function onToggleStraight() {
       const on = document.getElementById('straightPaths').checked;
@@ -1749,13 +1852,18 @@
     // ── Product management ────────────────────────────────────────────────────
     let editingProductId = null;
 
+    // Product names are typed by the user and rendered via innerHTML.
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
     function renderProductsList() {
       const list = document.getElementById('productsList');
       list.innerHTML = products.map(p => `
         <div class="product-item">
-          <div class="product-swatch" style="background:${p.color};"></div>
+          <div class="product-swatch" style="background:${escapeHtml(p.color)};"></div>
           <div style="flex:1;min-width:0;">
-            <div class="product-name">${p.name}</div>
+            <div class="product-name">${escapeHtml(p.name)}</div>
             <div class="product-specs">${p.spaceW}×${p.spaceH} m · ${p.shape === 'circle' ? 'circle' : 'rect'} · max ${p.maxCols}×${p.maxRows} · path ${p.pathW} m${p.spaceGap > 0 ? ` · gap ${p.spaceGap} m` : ''}</div>
           </div>
           <button class="btn-xs btn-xs-secondary" onclick="openProductModal(${p.id})">Edit</button>
@@ -1768,8 +1876,8 @@
       const list = document.getElementById('legendList');
       list.innerHTML = products.map(p => `
         <div class="legend-item">
-          <div class="legend-swatch" style="background:${p.color}; border:1px solid ${darkenHex(p.color)};"></div>
-          ${p.name} (${p.spaceW}×${p.spaceH} m)
+          <div class="legend-swatch" style="background:${escapeHtml(p.color)}; border:1px solid ${darkenHex(p.color)};"></div>
+          ${escapeHtml(p.name)} (${p.spaceW}×${p.spaceH} m)
         </div>`).join('');
     }
 
@@ -1818,6 +1926,14 @@
       const shape    = document.getElementById('pShape').value || 'rect';
       const color    = document.getElementById('pColor').value;
 
+      // Negative or fractional values would make the placement sweep stall.
+      if (!isValidProduct({ spaceW, spaceH, maxCols, maxRows, pathW, spaceGap })) {
+        document.getElementById('pError').textContent =
+          'Width and height must be > 0, max cols/rows whole numbers ≥ 1, path width and gap ≥ 0.';
+        return;
+      }
+      document.getElementById('pError').textContent = '';
+
       if (editingProductId) {
         const p = products.find(x => x.id === editingProductId);
         Object.assign(p, { name, spaceW, spaceH, maxCols, maxRows, pathW, spaceGap, shape, color });
@@ -1855,13 +1971,19 @@
         return;
       }
       section.style.display = 'block';
+      const zoneGeos = drawnPolygons.map(p => p.toGeoJSON());
       list.innerHTML = drawnPolygons.map((poly, i) => {
-        const area = Math.round(turf.area(poly.toGeoJSON())).toLocaleString('nl-NL');
+        const area = Math.round(turf.area(zoneGeos[i])).toLocaleString('nl-NL');
+        const overlapM2 = zoneOverlapExclusions(zoneGeos, i)
+          .reduce((s, ring) => s + turf.area(turf.polygon([ring])), 0);
+        const overlapNote = overlapM2 >= 1
+          ? `<small style="color:#fbbf24;display:block;">Overlaps an earlier area by ${Math.round(overlapM2).toLocaleString('nl-NL')} m² — spaces are placed there only once, in the earlier area</small>`
+          : '';
         const pid = polygonProducts.get(i) || products[0].id;
-        const opts = products.map(p => `<option value="${p.id}"${p.id === pid ? ' selected' : ''}>${p.name}</option>`).join('');
+        const opts = products.map(p => `<option value="${p.id}"${p.id === pid ? ' selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
         return `<div class="area-entry">
           <div class="area-entry-top">
-            <span class="area-label">Area ${i + 1} <small>(${area} m²)</small></span>
+            <span class="area-label">Area ${i + 1} <small>(${area} m²)</small>${overlapNote}</span>
             <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.72rem;flex-shrink:0;" onclick="selectAllInPolygon(${i})">Select all</button>
           </div>
           <select onchange="setPolygonProduct(${i}, this.value)">${opts}</select>
@@ -1898,18 +2020,21 @@
       const targetIndices = getTargetPolyIndices();
 
       setTimeout(() => {
+        // Ground shared by two areas is only placed once (in the earlier area).
+        const zoneGeos = drawnPolygons.map(p => p.toGeoJSON());
+        const overlaps = drawnPolygons.map((_, i) => zoneOverlapExclusions(zoneGeos, i));
         if (targetIndices) {
           // Partial update — only re-run polygons with selected spaces,
           // then re-select all spaces in those areas so they stay highlighted
           for (const i of targetIndices) {
             const product = getProductForPoly(i);
             clearPolyLayers(i);
-            renderBlocks(placer(drawnPolygons[i], angleDeg, offX, offY, product), i, product);
+            renderBlocks(placer(drawnPolygons[i], angleDeg, offX, offY, product, overlaps[i]), i, product);
             selectAllInPolygon(i);
           }
           updateExportSection();
         } else {
-          const results = drawnPolygons.map((poly, i) => placer(poly, angleDeg, offX, offY, getProductForPoly(i)));
+          const results = drawnPolygons.map((poly, i) => placer(poly, angleDeg, offX, offY, getProductForPoly(i), overlaps[i]));
           renderAllBlocks(results);
         }
 
@@ -1944,19 +2069,23 @@
       setTimeout(() => {
         let best = { spaces: -1, angleDeg: 0, offX: 0, offY: 0 };
 
-        // Coarse sweep: 18 angles (every 5°) × 3×3 offsets = 162 runs
-        // vs old 90×5×5 = 2,250 — ~14× faster with negligible quality loss
+        // Coarse sweep: 18 angles (every 5°, 0–85°) × 3×3 offsets = 162 runs, one
+        // shared setting for all target areas. This is the best layout FOUND, not an
+        // optimum: discovery measured up to 10 % (greedy) / 27 % (straight paths) more
+        // spaces with a wider search (DISCOVERY-OPTIMIZATION §4). Improvement: fase 0B.
         const offsetStepsX = [0, 17, 34];
         const offsetStepsY = [0, 8, 16];
 
         const targetPolyIndices = targetIndices ? [...targetIndices] : drawnPolygons.map((_, i) => i);
+        const zoneGeos = drawnPolygons.map(p => p.toGeoJSON());
+        const overlaps = drawnPolygons.map((_, i) => zoneOverlapExclusions(zoneGeos, i));
 
         for (let a = 0; a < 90; a += 5) {
           for (const ox of offsetStepsX) {
             for (const oy of offsetStepsY) {
               let spaces = 0;
               for (const i of targetPolyIndices) {
-                spaces += totalSpacesOf(placer(drawnPolygons[i], a, ox, oy, getProductForPoly(i)).blocks);
+                spaces += totalSpacesOf(placer(drawnPolygons[i], a, ox, oy, getProductForPoly(i), overlaps[i]).blocks);
               }
               if (spaces > best.spaces) {
                 best = { spaces, angleDeg: a, offX: ox, offY: oy };
@@ -1973,12 +2102,12 @@
           for (const i of targetIndices) {
             const product = getProductForPoly(i);
             clearPolyLayers(i);
-            renderBlocks(placer(drawnPolygons[i], best.angleDeg, best.offX, best.offY, product), i, product);
+            renderBlocks(placer(drawnPolygons[i], best.angleDeg, best.offX, best.offY, product, overlaps[i]), i, product);
             selectAllInPolygon(i);
           }
           updateExportSection();
         } else {
-          renderAllBlocks(drawnPolygons.map((poly, i) => placer(poly, best.angleDeg, best.offX, best.offY, getProductForPoly(i))));
+          renderAllBlocks(drawnPolygons.map((poly, i) => placer(poly, best.angleDeg, best.offX, best.offY, getProductForPoly(i), overlaps[i])));
         }
 
         const { totalBlocks: count, totalSpaces: spaces } = getTotalStats();
@@ -1991,7 +2120,7 @@
         const scopeLabel = targetIndices ? ` · ${targetIndices.size} area${targetIndices.size !== 1 ? 's' : ''}` : '';
         setStatus(
           spaces > 0
-            ? `Optimal: ${count} groups (${spaces} spaces) at ${best.angleDeg}°${modeLabel}${scopeLabel}.`
+            ? `Best found: ${count} groups (${spaces} spaces) at ${best.angleDeg}°${modeLabel}${scopeLabel}.`
             : 'Nothing fits. Try a larger polygon.',
           spaces > 0 ? 'ok' : ''
         );
@@ -2002,7 +2131,8 @@
     function updateExportSection() {
       const hasResults = polyResults.size > 0;
       document.getElementById('exportSection').style.display = hasResults ? 'block' : 'none';
-      document.getElementById('arcSyncArea').style.display   = (hasResults && arcToken) ? 'block' : 'none';
+      document.getElementById('arcSyncArea').style.display   = (ENABLE_ARCGIS_PUSH && hasResults && arcToken) ? 'block' : 'none';
+      document.getElementById('arcPushDisabledNote').style.display = ENABLE_ARCGIS_PUSH ? 'none' : 'block';
     }
 
     function exportGeoJSON() {
@@ -2034,6 +2164,10 @@
     }
 
     async function pushToArcGIS() {
+      if (!ENABLE_ARCGIS_PUSH) {
+        setStatus('Push to ArcGIS is disabled in this version. Use Download GeoJSON and hand the file to Team GIS.', '');
+        return;
+      }
       const layerUrl = document.getElementById('arcLayerWriteUrl').value.trim().replace(/\/+$/, '');
       if (!layerUrl) { setStatus('Enter the ArcGIS feature layer URL first.', ''); return; }
       if (!arcToken)  { setStatus('Not authenticated with ArcGIS.', ''); return; }
