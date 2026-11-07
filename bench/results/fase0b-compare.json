@@ -1,0 +1,1774 @@
+[
+ {
+  "case": "A_rect_300x200|GAP_5x10",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 826,
+   "perZone": [
+    826
+   ],
+   "settings": [
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 826,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 864,
+   "perZone": [
+    864
+   ],
+   "settings": [
+    {
+     "angleDeg": 87.45,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 756,
+   "validity": {
+    "spaces": 864,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 4.6
+ },
+ {
+  "case": "A_rect_300x200|GAP_5x10",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 764,
+   "perZone": [
+    764
+   ],
+   "settings": [
+    {
+     "angleDeg": 0,
+     "offX": 34,
+     "offY": 8
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 764,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 864,
+   "perZone": [
+    864
+   ],
+   "settings": [
+    {
+     "angleDeg": 87.45,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 756,
+   "validity": {
+    "spaces": 864,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 13.1
+ },
+ {
+  "case": "A_rect_300x200|SYN_6x8",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 517,
+   "perZone": [
+    517
+   ],
+   "settings": [
+    {
+     "angleDeg": 60,
+     "offX": 34,
+     "offY": 8
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 517,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 532,
+   "perZone": [
+    532
+   ],
+   "settings": [
+    {
+     "angleDeg": 177.45,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 756,
+   "validity": {
+    "spaces": 532,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 2.9
+ },
+ {
+  "case": "A_rect_300x200|SYN_6x8",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 512,
+   "perZone": [
+    512
+   ],
+   "settings": [
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 512,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 532,
+   "perZone": [
+    532
+   ],
+   "settings": [
+    {
+     "angleDeg": 177.45,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 756,
+   "validity": {
+    "spaces": 532,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 3.9
+ },
+ {
+  "case": "B_rect_rot23|GAP_5x10",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 864,
+   "perZone": [
+    864
+   ],
+   "settings": [
+    {
+     "angleDeg": 20,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 864,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 864,
+   "perZone": [
+    864
+   ],
+   "settings": [
+    {
+     "angleDeg": 20,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 759,
+   "validity": {
+    "spaces": 864,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 0
+ },
+ {
+  "case": "B_rect_rot23|GAP_5x10",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 864,
+   "perZone": [
+    864
+   ],
+   "settings": [
+    {
+     "angleDeg": 20,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 864,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 864,
+   "perZone": [
+    864
+   ],
+   "settings": [
+    {
+     "angleDeg": 20,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 759,
+   "validity": {
+    "spaces": 864,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 0
+ },
+ {
+  "case": "B_rect_rot23|SYN_6x8",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 532,
+   "perZone": [
+    532
+   ],
+   "settings": [
+    {
+     "angleDeg": 20,
+     "offX": 34,
+     "offY": 0
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 532,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 532,
+   "perZone": [
+    532
+   ],
+   "settings": [
+    {
+     "angleDeg": 20,
+     "offX": 34,
+     "offY": 0
+    }
+   ],
+   "runs": 759,
+   "validity": {
+    "spaces": 532,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 0
+ },
+ {
+  "case": "B_rect_rot23|SYN_6x8",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 532,
+   "perZone": [
+    532
+   ],
+   "settings": [
+    {
+     "angleDeg": 20,
+     "offX": 34,
+     "offY": 0
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 532,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 532,
+   "perZone": [
+    532
+   ],
+   "settings": [
+    {
+     "angleDeg": 20,
+     "offX": 34,
+     "offY": 0
+    }
+   ],
+   "runs": 759,
+   "validity": {
+    "spaces": 532,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 0
+ },
+ {
+  "case": "C_L_shape|GAP_5x10",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 624,
+   "perZone": [
+    624
+   ],
+   "settings": [
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 8
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 624,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 648,
+   "perZone": [
+    648
+   ],
+   "settings": [
+    {
+     "angleDeg": 87.45,
+     "offX": 0,
+     "offY": 16
+    }
+   ],
+   "runs": 756,
+   "validity": {
+    "spaces": 648,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 3.8
+ },
+ {
+  "case": "C_L_shape|GAP_5x10",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 563,
+   "perZone": [
+    563
+   ],
+   "settings": [
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 16
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 563,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 648,
+   "perZone": [
+    648
+   ],
+   "settings": [
+    {
+     "angleDeg": 87.45,
+     "offX": 0,
+     "offY": 16
+    }
+   ],
+   "runs": 756,
+   "validity": {
+    "spaces": 648,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 15.1
+ },
+ {
+  "case": "C_L_shape|SYN_6x8",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 381,
+   "perZone": [
+    381
+   ],
+   "settings": [
+    {
+     "angleDeg": 85,
+     "offX": 17,
+     "offY": 16
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 381,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 399,
+   "perZone": [
+    399
+   ],
+   "settings": [
+    {
+     "angleDeg": 177.45,
+     "offX": 17,
+     "offY": 0
+    }
+   ],
+   "runs": 757,
+   "validity": {
+    "spaces": 399,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 4.7
+ },
+ {
+  "case": "C_L_shape|SYN_6x8",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 375,
+   "perZone": [
+    375
+   ],
+   "settings": [
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 8
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 375,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 395,
+   "perZone": [
+    395
+   ],
+   "settings": [
+    {
+     "angleDeg": 87.45,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 757,
+   "validity": {
+    "spaces": 395,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 5.3
+ },
+ {
+  "case": "D_irregular|GAP_5x10",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 1065,
+   "perZone": [
+    1065
+   ],
+   "settings": [
+    {
+     "angleDeg": 65,
+     "offX": 17,
+     "offY": 16
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 1065,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 1073,
+   "perZone": [
+    1073
+   ],
+   "settings": [
+    {
+     "angleDeg": 66,
+     "offX": 27.5,
+     "offY": 2.5
+    }
+   ],
+   "runs": 999,
+   "validity": {
+    "spaces": 1073,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 0.8
+ },
+ {
+  "case": "D_irregular|GAP_5x10",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 997,
+   "perZone": [
+    997
+   ],
+   "settings": [
+    {
+     "angleDeg": 25,
+     "offX": 34,
+     "offY": 8
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 997,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 1023,
+   "perZone": [
+    1023
+   ],
+   "settings": [
+    {
+     "angleDeg": 77.13,
+     "offX": 13.75,
+     "offY": 16.67
+    }
+   ],
+   "runs": 996,
+   "validity": {
+    "spaces": 1023,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 2.6
+ },
+ {
+  "case": "D_irregular|SYN_6x8",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 695,
+   "perZone": [
+    695
+   ],
+   "settings": [
+    {
+     "angleDeg": 70,
+     "offX": 17,
+     "offY": 8
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 695,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 696,
+   "perZone": [
+    696
+   ],
+   "settings": [
+    {
+     "angleDeg": 71,
+     "offX": 23.5,
+     "offY": 0
+    }
+   ],
+   "runs": 999,
+   "validity": {
+    "spaces": 696,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 0.1
+ },
+ {
+  "case": "D_irregular|SYN_6x8",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 651,
+   "perZone": [
+    651
+   ],
+   "settings": [
+    {
+     "angleDeg": 20,
+     "offX": 34,
+     "offY": 16
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 651,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 664,
+   "perZone": [
+    664
+   ],
+   "settings": [
+    {
+     "angleDeg": 77.13,
+     "offX": 27.42,
+     "offY": 9.8
+    }
+   ],
+   "runs": 996,
+   "validity": {
+    "spaces": 664,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 2
+ },
+ {
+  "case": "E_strip_62x400|GAP_5x10",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 326,
+   "perZone": [
+    326
+   ],
+   "settings": [
+    {
+     "angleDeg": 0,
+     "offX": 34,
+     "offY": 8
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 326,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 352,
+   "perZone": [
+    352
+   ],
+   "settings": [
+    {
+     "angleDeg": 177.45,
+     "offX": 0,
+     "offY": 8
+    }
+   ],
+   "runs": 757,
+   "validity": {
+    "spaces": 352,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 8
+ },
+ {
+  "case": "E_strip_62x400|GAP_5x10",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 284,
+   "perZone": [
+    284
+   ],
+   "settings": [
+    {
+     "angleDeg": 85,
+     "offX": 34,
+     "offY": 0
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 284,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 352,
+   "perZone": [
+    352
+   ],
+   "settings": [
+    {
+     "angleDeg": 177.45,
+     "offX": 0,
+     "offY": 8
+    }
+   ],
+   "runs": 757,
+   "validity": {
+    "spaces": 352,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 23.9
+ },
+ {
+  "case": "E_strip_62x400|SYN_6x8",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 204,
+   "perZone": [
+    204
+   ],
+   "settings": [
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 204,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 224,
+   "perZone": [
+    224
+   ],
+   "settings": [
+    {
+     "angleDeg": 177.45,
+     "offX": 35.25,
+     "offY": 0
+    }
+   ],
+   "runs": 757,
+   "validity": {
+    "spaces": 224,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 9.8
+ },
+ {
+  "case": "E_strip_62x400|SYN_6x8",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 198,
+   "perZone": [
+    198
+   ],
+   "settings": [
+    {
+     "angleDeg": 85,
+     "offX": 17,
+     "offY": 16
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 198,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 224,
+   "perZone": [
+    224
+   ],
+   "settings": [
+    {
+     "angleDeg": 177.45,
+     "offX": 35.25,
+     "offY": 0
+    }
+   ],
+   "runs": 756,
+   "validity": {
+    "spaces": 224,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 13.1
+ },
+ {
+  "case": "F_trapezoid|GAP_5x10",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 622,
+   "perZone": [
+    622
+   ],
+   "settings": [
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 16
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 622,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 629,
+   "perZone": [
+    629
+   ],
+   "settings": [
+    {
+     "angleDeg": 87.45,
+     "offX": 27.5,
+     "offY": 5
+    }
+   ],
+   "runs": 797,
+   "validity": {
+    "spaces": 629,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 1.1
+ },
+ {
+  "case": "F_trapezoid|GAP_5x10",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 587,
+   "perZone": [
+    587
+   ],
+   "settings": [
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 16
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 587,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 624,
+   "perZone": [
+    624
+   ],
+   "settings": [
+    {
+     "angleDeg": 87.45,
+     "offX": 27.5,
+     "offY": 0
+    }
+   ],
+   "runs": 797,
+   "validity": {
+    "spaces": 624,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 6.3
+ },
+ {
+  "case": "F_trapezoid|SYN_6x8",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 402,
+   "perZone": [
+    402
+   ],
+   "settings": [
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 16
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 402,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 416,
+   "perZone": [
+    416
+   ],
+   "settings": [
+    {
+     "angleDeg": 87.45,
+     "offX": 19.58,
+     "offY": 7
+    }
+   ],
+   "runs": 796,
+   "validity": {
+    "spaces": 416,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 3.5
+ },
+ {
+  "case": "F_trapezoid|SYN_6x8",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 370,
+   "perZone": [
+    370
+   ],
+   "settings": [
+    {
+     "angleDeg": 5,
+     "offX": 17,
+     "offY": 8
+    }
+   ],
+   "runs": 162,
+   "validity": {
+    "spaces": 370,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 416,
+   "perZone": [
+    416
+   ],
+   "settings": [
+    {
+     "angleDeg": 87.45,
+     "offX": 19.58,
+     "offY": 0
+    }
+   ],
+   "runs": 797,
+   "validity": {
+    "spaces": 416,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 12.4
+ },
+ {
+  "case": "SITE_MIX(7 zones)|GAP_5x10",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 3151,
+   "perZone": [
+    528,
+    459,
+    271,
+    546,
+    404,
+    695,
+    248
+   ],
+   "settings": [
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 85,
+     "offX": 0,
+     "offY": 0
+    }
+   ],
+   "runs": 1134,
+   "validity": {
+    "spaces": 3151,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 3448,
+   "perZone": [
+    540,
+    540,
+    336,
+    576,
+    432,
+    736,
+    288
+   ],
+   "settings": [
+    {
+     "angleDeg": 87.46,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 27.41,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 149.41,
+     "offX": 17,
+     "offY": 0
+    },
+    {
+     "angleDeg": 87.46,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 87.46,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 87.45,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 87.45,
+     "offX": 0,
+     "offY": 8
+    }
+   ],
+   "runs": 5294,
+   "validity": {
+    "spaces": 3448,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 9.4
+ },
+ {
+  "case": "SITE_MIX(7 zones)|GAP_5x10",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 2796,
+   "perZone": [
+    458,
+    396,
+    227,
+    456,
+    396,
+    579,
+    284
+   ],
+   "settings": [
+    {
+     "angleDeg": 0,
+     "offX": 17,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 17,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 17,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 17,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 17,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 17,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 17,
+     "offY": 16
+    }
+   ],
+   "runs": 1134,
+   "validity": {
+    "spaces": 2796,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 3388,
+   "perZone": [
+    540,
+    540,
+    336,
+    576,
+    432,
+    676,
+    288
+   ],
+   "settings": [
+    {
+     "angleDeg": 87.46,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 27.41,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 149.41,
+     "offX": 17,
+     "offY": 0
+    },
+    {
+     "angleDeg": 87.46,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 87.46,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 177.45,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 87.45,
+     "offX": 0,
+     "offY": 8
+    }
+   ],
+   "runs": 5293,
+   "validity": {
+    "spaces": 3388,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 21.2
+ },
+ {
+  "case": "SITE_MIX(7 zones)|SYN_6x8",
+  "alg": "greedy",
+  "before": {
+   "name": "old",
+   "spaces": 2040,
+   "perZone": [
+    325,
+    316,
+    196,
+    335,
+    253,
+    447,
+    168
+   ],
+   "settings": [
+    {
+     "angleDeg": 85,
+     "offX": 34,
+     "offY": 16
+    },
+    {
+     "angleDeg": 85,
+     "offX": 34,
+     "offY": 16
+    },
+    {
+     "angleDeg": 85,
+     "offX": 34,
+     "offY": 16
+    },
+    {
+     "angleDeg": 85,
+     "offX": 34,
+     "offY": 16
+    },
+    {
+     "angleDeg": 85,
+     "offX": 34,
+     "offY": 16
+    },
+    {
+     "angleDeg": 85,
+     "offX": 34,
+     "offY": 16
+    },
+    {
+     "angleDeg": 85,
+     "offX": 34,
+     "offY": 16
+    }
+   ],
+   "runs": 1134,
+   "validity": {
+    "spaces": 2040,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 2199,
+   "perZone": [
+    352,
+    352,
+    210,
+    350,
+    275,
+    492,
+    168
+   ],
+   "settings": [
+    {
+     "angleDeg": 177.46,
+     "offX": 0,
+     "offY": 9.33
+    },
+    {
+     "angleDeg": 27.41,
+     "offX": 11.75,
+     "offY": 4.67
+    },
+    {
+     "angleDeg": 149.41,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 87.46,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 87.46,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 177.45,
+     "offX": 39.17,
+     "offY": 2.8
+    },
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 16
+    }
+   ],
+   "runs": 5297,
+   "validity": {
+    "spaces": 2199,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 7.8
+ },
+ {
+  "case": "SITE_MIX(7 zones)|SYN_6x8",
+  "alg": "straight",
+  "before": {
+   "name": "old",
+   "spaces": 1815,
+   "perZone": [
+    295,
+    271,
+    158,
+    307,
+    199,
+    417,
+    168
+   ],
+   "settings": [
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 16
+    },
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 16
+    }
+   ],
+   "runs": 1134,
+   "validity": {
+    "spaces": 1815,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "after": {
+   "name": "new",
+   "spaces": 2199,
+   "perZone": [
+    352,
+    352,
+    210,
+    350,
+    275,
+    492,
+    168
+   ],
+   "settings": [
+    {
+     "angleDeg": 177.46,
+     "offX": 0,
+     "offY": 9.33
+    },
+    {
+     "angleDeg": 27.41,
+     "offX": 11.75,
+     "offY": 4.67
+    },
+    {
+     "angleDeg": 149.41,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 87.46,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 87.46,
+     "offX": 0,
+     "offY": 0
+    },
+    {
+     "angleDeg": 177.45,
+     "offX": 19.58,
+     "offY": 2.8
+    },
+    {
+     "angleDeg": 0,
+     "offX": 0,
+     "offY": 16
+    }
+   ],
+   "runs": 5298,
+   "validity": {
+    "spaces": 2199,
+    "outsideZone": 0,
+    "inExclusion": 0,
+    "overlapsWithinZone": 0,
+    "overlapsAcrossZones": 0,
+    "maxViolationM2": 0,
+    "valid": true
+   }
+  },
+  "gainPct": 21.2
+ }
+]

@@ -383,7 +383,7 @@
       </div>
       <div class="instruction-step">
         <div class="step-num">4</div>
-        <div class="step-text"><strong>Calculate</strong> places blocks at the current settings · <strong>Optimize</strong> finds the best rotation and offset automatically</div>
+        <div class="step-text"><strong>Calculate</strong> places blocks at the current settings · <strong>Optimize</strong> searches the best rotation and offset for each area separately</div>
       </div>
       <div class="instruction-step">
         <div class="step-num">5</div>
@@ -503,7 +503,7 @@
           <div class="stat-card-value neutral" id="totalArea">—</div>
         </div>
         <div class="stat-card">
-          <div class="stat-card-label">Best rotation</div>
+          <div class="stat-card-label">Rotation</div>
           <div class="stat-card-value neutral" id="bestRot">—</div>
         </div>
         <div class="stat-card" style="grid-column: span 2;">
@@ -651,6 +651,7 @@
       { id: 1, name: 'Get a Place', spaceW: 5, spaceH: 10, maxCols: 10, maxRows: 2, pathW: 5, spaceGap: 0, color: '#4ade80', shape: 'rect' }
     ];
     const polygonProducts = new Map(); // polyIndex → productId
+    const polySettings = new Map();    // polyIndex → { angleDeg, offX, offY } used for its current layout
 
     function getProductForPoly(polyIndex) {
       const pid = polygonProducts.get(polyIndex);
@@ -791,6 +792,7 @@
 
     map.on(L.Draw.Event.EDITED, () => {
       drawnPolygons = drawnItems.getLayers();
+      polySettings.clear();
       updateAreaDisplay();
       updateAreasList();
       resetSpatialState();
@@ -805,6 +807,7 @@
         clearAll();
       } else {
         polygonProducts.clear(); // indices shift after deletion; user re-assigns
+        polySettings.clear();
         updateAreaDisplay();
         updateAreasList();
         resetSpatialState();
@@ -1195,6 +1198,106 @@
           if (!placed) rowDist += stepH;
         }
       }
+    }
+
+    // ── Per-zone search (fase 0B) ─────────────────────────────────────────────
+    // Candidate rotations for a zone: every 5° over the full 0–175° range (blocks are not
+    // square, so θ and θ+90° are different layouts) plus the directions of the zone's
+    // longest edges and their perpendiculars, measured in the same local frame the
+    // placement uses. Zones drawn along a grid (e.g. UTM 32N, 2.5° off true north) then
+    // get their exact orientation instead of the nearest multiple of 5°.
+    function normAngle(a) {
+      const n = Math.round((((a % 180) + 180) % 180) * 100) / 100;
+      return n === 180 ? 0 : n;
+    }
+
+    // Directions (0–180°) of the zone's longest edges and their perpendiculars.
+    function edgeAngles(geo) {
+      const out = [];
+      const parts = zoneParts(geo);
+      if (parts.length > 0) {
+        const cLat = turf.centroid(geo).geometry.coordinates[1];
+        const f = getFactors(cLat);
+        const edges = [];
+        for (const part of parts) {
+          const ring = part.outer;
+          for (let i = 0; i < ring.length - 1; i++) {
+            const dx = (ring[i + 1][0] - ring[i][0]) * f.mPerLng, dy = (ring[i + 1][1] - ring[i][1]) * f.mPerLat;
+            const len = Math.hypot(dx, dy);
+            if (len >= 5) edges.push({ len, angle: Math.atan2(dy, dx) * 180 / Math.PI });
+          }
+        }
+        // Longest edges first; at most 8 distinct directions (concave hulls have many tiny edges).
+        edges.sort((a, b) => b.len - a.len);
+        const dirs = [];
+        for (const e of edges) {
+          const d = (((e.angle % 180) + 180) % 180);
+          if (!dirs.some(x => Math.min(Math.abs(x - d), 180 - Math.abs(x - d)) < 0.5)) dirs.push(d);
+          if (dirs.length === 8) break;
+        }
+        for (const d of dirs) for (const a of [normAngle(d), normAngle(d + 90)]) if (!out.includes(a)) out.push(a);
+      }
+      return out.sort((a, b) => a - b);
+    }
+
+    function candidateAngles(geo) {
+      const set = new Set();
+      for (let a = 0; a < 180; a += 5) set.add(a);
+      for (const a of edgeAngles(geo)) set.add(a);
+      return [...set].sort((a, b) => a - b);
+    }
+
+    // Best layout found for one zone. The search is a superset of the old global grid
+    // (0–85° × X[0,17,34] × Y[0,8,16]), so for the same zone it never finds fewer spaces:
+    //   stage 1: all candidate angles × the old 3×3 offsets (+ 4×3 period offsets for edge angles)
+    //   stage 2: the 3 best angles of stage 1, each −1°/0/+1°, × 6×5 offsets spread over
+    //            one block period of the product (path to path)
+    //   stage 3: the best angle × 12×10 offsets over the same period
+    // Deterministic: ties keep the first setting tried. Returns the best FOUND, not a proven optimum.
+    function optimizeZone(polygon, product, extraExclusions, placer) {
+      const none = { spaces: 0, angleDeg: 0, offX: 0, offY: 0, runs: 0 };
+      if (!isValidProduct(product)) return none;
+      const geo = polygon.toGeoJSON();
+      if (zoneParts(geo).length === 0) return none;
+      const count = r => r.blocks.reduce((s, b) => s + b.ncols * b.nrows, 0);
+      const seen = new Map();
+      let best = { spaces: -1, angleDeg: 0, offX: 0, offY: 0 }, runs = 0;
+      const tryAt = (a, ox, oy) => {
+        const key = `${a}|${ox}|${oy}`;
+        if (seen.has(key)) return seen.get(key);
+        runs++;
+        const n = count(placer(polygon, a, ox, oy, product, extraExclusions));
+        seen.set(key, n);
+        if (n > best.spaces) best = { spaces: n, angleDeg: a, offX: ox, offY: oy };
+        return n;
+      };
+
+      const gap = product.spaceGap || 0;
+      const px = product.maxCols * (product.spaceW + gap) - gap + product.pathW;
+      const py = product.maxRows * (product.spaceH + gap) - gap + product.pathW;
+      const r2 = v => Math.round(v * 100) / 100;
+
+      // Edge-derived angles also get a product-period offset grid (4×3) in stage 1, so they
+      // are ranked fairly even when the old offsets happen to fit them badly.
+      const edges = new Set(edgeAngles(geo));
+      const perAngle = [];
+      for (const a of candidateAngles(geo)) {
+        let m = -1;
+        for (const ox of [0, 17, 34]) for (const oy of [0, 8, 16]) m = Math.max(m, tryAt(a, ox, oy));
+        if (edges.has(a)) for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) m = Math.max(m, tryAt(a, r2(i * px / 4), r2(j * py / 3)));
+        perAngle.push({ a, m });
+      }
+      const top = perAngle.slice().sort((x, y) => y.m - x.m || x.a - y.a).slice(0, 3);
+      for (const { a } of top) for (const da of [-1, 0, 1]) {
+        const aa = normAngle(a + da);
+        for (let i = 0; i < 6; i++) for (let j = 0; j < 5; j++)
+          tryAt(aa, r2(i * px / 6), r2(j * py / 5));
+      }
+      //   stage 3: the best angle so far × a finer 12×10 offset grid (narrow strips are offset-sensitive)
+      const bestAngle = best.angleDeg;
+      for (let i = 0; i < 12; i++) for (let j = 0; j < 10; j++)
+        tryAt(bestAngle, r2(i * px / 12), r2(j * py / 10));
+      return { ...best, spaces: Math.max(best.spaces, 0), runs };
     }
 
     // @bench-extract-end — everything above (from "Coordinate helpers") is pure
@@ -1982,11 +2085,15 @@
         const overlapNote = overlapM2 >= 1
           ? `<small style="color:#fbbf24;display:block;">Overlaps an earlier area by ${Math.round(overlapM2).toLocaleString('nl-NL')} m² — spaces are placed there only once, in the earlier area</small>`
           : '';
+        const setting = polySettings.get(i);
+        const settingNote = setting
+          ? `<small style="color:#64748b;display:block;">Rotation ${setting.angleDeg}° · offset ${setting.offX} / ${setting.offY} m</small>`
+          : '';
         const pid = polygonProducts.get(i) || products[0].id;
         const opts = products.map(p => `<option value="${p.id}"${p.id === pid ? ' selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
         return `<div class="area-entry">
           <div class="area-entry-top">
-            <span class="area-label">Area ${i + 1} <small>(${area} m²)</small>${overlapNote}</span>
+            <span class="area-label">Area ${i + 1} <small>(${area} m²)</small>${overlapNote}${settingNote}</span>
             <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.72rem;flex-shrink:0;" onclick="selectAllInPolygon(${i})">Select all</button>
           </div>
           <select onchange="setPolygonProduct(${i}, this.value)">${opts}</select>
@@ -2033,18 +2140,21 @@
             const product = getProductForPoly(i);
             clearPolyLayers(i);
             renderBlocks(placer(drawnPolygons[i], angleDeg, offX, offY, product, overlaps[i]), i, product);
+            polySettings.set(i, { angleDeg, offX, offY });
             selectAllInPolygon(i);
           }
           updateExportSection();
         } else {
           const results = drawnPolygons.map((poly, i) => placer(poly, angleDeg, offX, offY, getProductForPoly(i), overlaps[i]));
           renderAllBlocks(results);
+          drawnPolygons.forEach((_, i) => polySettings.set(i, { angleDeg, offX, offY }));
         }
+        updateAreasList();
 
         const { totalBlocks: count, totalSpaces: spaces } = getTotalStats();
         document.getElementById('totalSpaces').textContent = spaces.toLocaleString('nl-NL');
         document.getElementById('totalBlocks').textContent = count;
-        document.getElementById('bestRot').textContent = angleDeg + '°';
+        document.getElementById('bestRot').textContent = rotationSummary();
         document.getElementById('optimal-badge').style.display = 'none';
 
         if (!silent) {
@@ -2063,71 +2173,70 @@
     function optimize() {
       if (drawnPolygons.length === 0) return;
       const targetIndices = getTargetPolyIndices();
-
-      setStatus('Optimizing rotation & offset…', 'busy');
-
       const straight = document.getElementById('straightPaths').checked;
       const placer = straight ? runPlacementStraight : runPlacement;
 
-      setTimeout(() => {
-        let best = { spaces: -1, angleDeg: 0, offX: 0, offY: 0 };
+      // Each area gets its own rotation and offset (optimizeZone): ~0.3–3 s per area.
+      // Areas are processed one at a time so the status bar can show progress.
+      const targets = targetIndices ? [...targetIndices] : drawnPolygons.map((_, i) => i);
+      const zoneGeos = drawnPolygons.map(p => p.toGeoJSON());
+      const overlaps = drawnPolygons.map((_, i) => zoneOverlapExclusions(zoneGeos, i));
+      const buttons = ['calcBtn', 'optBtn'].map(id => document.getElementById(id));
+      buttons.forEach(b => { b.disabled = true; });
+      if (!targetIndices) resetSpatialState();
+      let k = 0, runs = 0;
 
-        // Coarse sweep: 18 angles (every 5°, 0–85°) × 3×3 offsets = 162 runs, one
-        // shared setting for all target areas. This is the best layout FOUND, not an
-        // optimum: discovery measured up to 10 % (greedy) / 27 % (straight paths) more
-        // spaces with a wider search (DISCOVERY-OPTIMIZATION §4). Improvement: fase 0B.
-        const offsetStepsX = [0, 17, 34];
-        const offsetStepsY = [0, 8, 16];
+      const next = () => {
+        if (k === targets.length) return finish();
+        const i = targets[k];
+        setStatus(`Optimizing area ${i + 1} (${k + 1} of ${targets.length})…`, 'busy');
+        setTimeout(() => {
+          const product = getProductForPoly(i);
+          const best = optimizeZone(drawnPolygons[i], product, overlaps[i], placer);
+          runs += best.runs;
+          polySettings.set(i, { angleDeg: best.angleDeg, offX: best.offX, offY: best.offY });
+          clearPolyLayers(i);
+          renderBlocks(placer(drawnPolygons[i], best.angleDeg, best.offX, best.offY, product, overlaps[i]), i, product);
+          if (targetIndices) selectAllInPolygon(i);
+          k++;
+          next();
+        }, 30);
+      };
 
-        const targetPolyIndices = targetIndices ? [...targetIndices] : drawnPolygons.map((_, i) => i);
-        const zoneGeos = drawnPolygons.map(p => p.toGeoJSON());
-        const overlaps = drawnPolygons.map((_, i) => zoneOverlapExclusions(zoneGeos, i));
-
-        for (let a = 0; a < 90; a += 5) {
-          for (const ox of offsetStepsX) {
-            for (const oy of offsetStepsY) {
-              let spaces = 0;
-              for (const i of targetPolyIndices) {
-                spaces += totalSpacesOf(placer(drawnPolygons[i], a, ox, oy, getProductForPoly(i), overlaps[i]).blocks);
-              }
-              if (spaces > best.spaces) {
-                best = { spaces, angleDeg: a, offX: ox, offY: oy };
-              }
-            }
-          }
+      const finish = () => {
+        buttons.forEach(b => { b.disabled = false; });
+        if (targets.length === 1) {
+          const s = polySettings.get(targets[0]);
+          document.getElementById('rotation').value = s.angleDeg;
+          document.getElementById('offsetX').value  = s.offX;
+          document.getElementById('offsetY').value  = s.offY;
         }
-
-        document.getElementById('rotation').value = best.angleDeg;
-        document.getElementById('offsetX').value  = best.offX;
-        document.getElementById('offsetY').value  = best.offY;
-
-        if (targetIndices) {
-          for (const i of targetIndices) {
-            const product = getProductForPoly(i);
-            clearPolyLayers(i);
-            renderBlocks(placer(drawnPolygons[i], best.angleDeg, best.offX, best.offY, product, overlaps[i]), i, product);
-            selectAllInPolygon(i);
-          }
-          updateExportSection();
-        } else {
-          renderAllBlocks(drawnPolygons.map((poly, i) => placer(poly, best.angleDeg, best.offX, best.offY, getProductForPoly(i), overlaps[i])));
-        }
-
+        updateExportSection();
+        updateAreasList();
         const { totalBlocks: count, totalSpaces: spaces } = getTotalStats();
         document.getElementById('totalSpaces').textContent = spaces.toLocaleString('nl-NL');
         document.getElementById('totalBlocks').textContent = count;
-        document.getElementById('bestRot').textContent = best.angleDeg + '°';
+        document.getElementById('bestRot').textContent = rotationSummary();
         document.getElementById('optimal-badge').style.display = 'inline';
 
         const modeLabel = straight ? ' · straight paths' : '';
         const scopeLabel = targetIndices ? ` · ${targetIndices.size} area${targetIndices.size !== 1 ? 's' : ''}` : '';
         setStatus(
           spaces > 0
-            ? `Best found: ${count} groups (${spaces} spaces) at ${best.angleDeg}°${modeLabel}${scopeLabel}.`
+            ? `Best found per area: ${count} groups (${spaces} spaces)${modeLabel}${scopeLabel} · ${runs.toLocaleString('nl-NL')} layouts tried.`
             : 'Nothing fits. Try a larger polygon.',
           spaces > 0 ? 'ok' : ''
         );
-      }, 30);
+      };
+
+      next();
+    }
+
+    // Rotation shown in the Results card: one angle if all calculated areas share it.
+    function rotationSummary() {
+      const angles = [...new Set([...polyResults.keys()]
+        .map(i => polySettings.get(i)).filter(Boolean).map(s => s.angleDeg))];
+      return angles.length === 0 ? '—' : angles.length === 1 ? angles[0] + '°' : 'per area';
     }
 
     // ── Export / Sync ─────────────────────────────────────────────────────────
@@ -2264,6 +2373,7 @@
       resetSpatialState();
       drawnPolygons = [];
       polygonProducts.clear();
+      polySettings.clear();
       document.getElementById('calcBtn').disabled = true;
       document.getElementById('optBtn').disabled = true;
       document.getElementById('rectSelectBtn').disabled = true;

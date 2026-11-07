@@ -18,6 +18,8 @@ const EXPORTS = [
   'spaceCorners', 'blockCorners', 'polygonsOverlap',
   // Added in fase 0 (absent in older versions):
   'zoneParts', 'zoneOverlapExclusions', 'unionAreaM2', 'isValidProduct',
+  // Added in fase 0B:
+  'candidateAngles', 'edgeAngles', 'optimizeZone',
 ];
 
 export function extractRegion(html) {
