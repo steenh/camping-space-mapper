@@ -20,7 +20,16 @@ const EXPORTS = [
   'zoneParts', 'zoneOverlapExclusions', 'unionAreaM2', 'isValidProduct', 'overlapUnusedM2',
   // Added in fase 0B:
   'candidateAngles', 'edgeAngles', 'optimizeZone',
+  // Not buildOptimizeWorkerSource (fase 0B.4): loadEngine rewrites the word drawnExclusions, which
+  // would also change the worker script that function builds. tests/worker.test.mjs loads it unmodified.
 ];
+
+// The page's inline (non-src) script: the text the app hands to buildOptimizeWorkerSource().
+export function appScriptText(html) {
+  const m = html.match(/<script>([\s\S]*?)<\/script>/);
+  if (!m) throw new Error('inline <script> not found in index.html');
+  return m[1];
+}
 
 export function extractRegion(html) {
   const start = html.indexOf(START);

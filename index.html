@@ -469,6 +469,7 @@
       <div class="btn-row" style="margin-bottom: 8px;">
         <button class="btn btn-primary" id="calcBtn" onclick="calculate()" disabled>Calculate</button>
         <button class="btn btn-optimize" id="optBtn" onclick="optimize()" disabled>Optimize</button>
+        <button class="btn btn-danger" id="cancelOptBtn" onclick="cancelOptimize()" style="display:none" title="Stop Optimize: areas not finished yet keep their previous layout">Cancel</button>
       </div>
       <div class="btn-row" style="margin-top:8px;">
         <button class="btn btn-secondary" id="rectSelectBtn" onclick="toggleRectSelect()" disabled>Select area</button>
@@ -803,10 +804,11 @@
         map.getContainer().style.cursor = '';
         const lyr = e.layer;
         lyr.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.25, weight: 2, dashArray: '5 4' });
+        const note = cancelOptimizeForChange();
         drawnExclusions.push(lyr);
         exclusionItems.addLayer(lyr);
         updateExclusionsList();
-        setStatus(`Exclusion zone ${drawnExclusions.length} added. Recalculate to apply.`, 'info');
+        setStatus(`Exclusion zone ${drawnExclusions.length} added. Recalculate to apply.${note}`, 'info');
         return;
       }
       // Feature polygon select mode — select ArcGIS features inside drawn polygon
@@ -837,6 +839,7 @@
         return;
       }
 
+      const note = cancelOptimizeForChange();
       drawnPolygons.push(e.layer);
       drawnItems.addLayer(e.layer);
       updateAreaDisplay();
@@ -845,11 +848,12 @@
       document.getElementById('optBtn').disabled = false;
       document.getElementById('rectSelectBtn').disabled = false;
       const n = drawnPolygons.length;
-      setStatus(`${n} polygon${n > 1 ? 's' : ''} drawn. Click Calculate or Optimize.`, 'info');
+      setStatus(`${n} polygon${n > 1 ? 's' : ''} drawn. Click Calculate or Optimize.${note}`, 'info');
       clearResults();
     });
 
     map.on(L.Draw.Event.EDITED, () => {
+      const note = cancelOptimizeForChange();
       drawnPolygons = drawnItems.getLayers();
       polySettings.clear();
       updateAreaDisplay();
@@ -857,10 +861,11 @@
       resetSpatialState();
       updateSelectionDisplay();
       clearResults();
-      setStatus('Polygon(s) edited. Recalculate to update.', 'info');
+      setStatus(`Polygon(s) edited. Recalculate to update.${note}`, 'info');
     });
 
     map.on(L.Draw.Event.DELETED, () => {
+      const note = cancelOptimizeForChange();
       drawnPolygons = drawnItems.getLayers();
       if (drawnPolygons.length === 0) {
         clearAll();
@@ -873,7 +878,7 @@
         updateSelectionDisplay();
         clearResults();
         const n = drawnPolygons.length;
-        setStatus(`${n} polygon${n > 1 ? 's' : ''} remaining. Recalculate to update.`, 'info');
+        setStatus(`${n} polygon${n > 1 ? 's' : ''} remaining. Recalculate to update.${note}`, 'info');
       }
     });
 
@@ -1330,14 +1335,17 @@
     //            one block period of the product (path to path)
     //   stage 3: the best angle × 12×10 offsets over the same period
     // Deterministic: ties keep the first setting tried. Returns the best FOUND, not a proven optimum.
-    function optimizeZone(polygon, product, extraExclusions, placer) {
+    // onProgress(runs, planned), optional: called after every layout tried. `planned` is an upper
+    // bound of the layouts this search will try (duplicates are skipped), so runs <= planned
+    // always holds. The hook only observes: the result is the same with or without it.
+    function optimizeZone(polygon, product, extraExclusions, placer, onProgress) {
       const none = { spaces: 0, angleDeg: 0, offX: 0, offY: 0, runs: 0 };
       if (!isValidProduct(product)) return none;
       const geo = polygon.toGeoJSON();
       if (zoneParts(geo).length === 0) return none;
       const count = r => r.blocks.reduce((s, b) => s + b.ncols * b.nrows, 0);
       const seen = new Map();
-      let best = { spaces: -1, angleDeg: 0, offX: 0, offY: 0 }, runs = 0;
+      let best = { spaces: -1, angleDeg: 0, offX: 0, offY: 0 }, runs = 0, planned = 0;
       const tryAt = (a, ox, oy) => {
         const key = `${a}|${ox}|${oy}`;
         if (seen.has(key)) return seen.get(key);
@@ -1345,6 +1353,7 @@
         const n = count(placer(polygon, a, ox, oy, product, extraExclusions));
         seen.set(key, n);
         if (n > best.spaces) best = { spaces: n, angleDeg: a, offX: ox, offY: oy };
+        if (onProgress) onProgress(runs, planned);
         return n;
       };
 
@@ -1356,24 +1365,78 @@
       // Edge-derived angles also get a product-period offset grid (4×3) in stage 1, so they
       // are ranked fairly even when the old offsets happen to fit them badly.
       const edges = new Set(edgeAngles(geo));
+      const angles = candidateAngles(geo);
+      const STAGE2 = 3 * 3 * 6 * 5, STAGE3 = 12 * 10;
+      planned = angles.length * 3 * 3 + edges.size * 4 * 3 + STAGE2 + STAGE3;
       const perAngle = [];
-      for (const a of candidateAngles(geo)) {
+      for (const a of angles) {
         let m = -1;
         for (const ox of [0, 17, 34]) for (const oy of [0, 8, 16]) m = Math.max(m, tryAt(a, ox, oy));
         if (edges.has(a)) for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) m = Math.max(m, tryAt(a, r2(i * px / 4), r2(j * py / 3)));
         perAngle.push({ a, m });
       }
+      planned = runs + STAGE2 + STAGE3;
       const top = perAngle.slice().sort((x, y) => y.m - x.m || x.a - y.a).slice(0, 3);
       for (const { a } of top) for (const da of [-1, 0, 1]) {
         const aa = normAngle(a + da);
         for (let i = 0; i < 6; i++) for (let j = 0; j < 5; j++)
           tryAt(aa, r2(i * px / 6), r2(j * py / 5));
       }
+      planned = runs + STAGE3;
       //   stage 3: the best angle so far × a finer 12×10 offset grid (narrow strips are offset-sensitive)
       const bestAngle = best.angleDeg;
       for (let i = 0; i < 12; i++) for (let j = 0; j < 10; j++)
         tryAt(bestAngle, r2(i * px / 12), r2(j * py / 10));
       return { ...best, spaces: Math.max(best.spaces, 0), runs };
+    }
+
+    // ── Optimize Web Worker (fase 0B.4) ───────────────────────────────────────
+    // Optimize runs optimizeZone in ONE dedicated Web Worker (see optimize()). The worker's
+    // script is Turf + this engine region, taken from the page's own script, so the worker runs
+    // exactly the same code as the main thread. handleOptimizeMessage and optimizeWorkerMain only
+    // run inside the worker; the page never calls them. Zones and exclusions arrive as GeoJSON and are wrapped
+    // as { toGeoJSON } stand-ins for Leaflet layers (the engine only calls toGeoJSON()).
+    //   in:  { type: 'optimize', placer: 'greedy' | 'straight', exclusions: [Feature],
+    //          zones: [{ index, feature, product, overlaps }] }   (overlaps: [lng, lat] rings)
+    //   out: { type: 'progress', k, index, runs, planned }   every OPTIMIZE_PROGRESS_EVERY layouts
+    //        { type: 'zone', k, index, result }               zone k finished (zones run in order)
+    //        { type: 'done', runs }  ·  { type: 'error', message }
+    const OPTIMIZE_PROGRESS_EVERY = 25;
+
+    function handleOptimizeMessage(msg, post) {
+      if (!msg || msg.type !== 'optimize') return;
+      const asLayer = feature => ({ toGeoJSON: () => feature });
+      drawnExclusions = (msg.exclusions || []).map(asLayer);
+      const placer = msg.placer === 'straight' ? runPlacementStraight : runPlacement;
+      let total = 0;
+      msg.zones.forEach((z, k) => {
+        const result = optimizeZone(asLayer(z.feature), z.product, z.overlaps, placer, (runs, planned) => {
+          if (runs % OPTIMIZE_PROGRESS_EVERY === 0) post({ type: 'progress', k, index: z.index, runs, planned });
+        });
+        total += result.runs;
+        post({ type: 'zone', k, index: z.index, result });
+      });
+      post({ type: 'done', runs: total });
+    }
+
+    function optimizeWorkerMain(scope) {
+      scope.onmessage = e => {
+        try {
+          handleOptimizeMessage(e.data, m => scope.postMessage(m));
+        } catch (err) {
+          scope.postMessage({ type: 'error', message: String((err && err.message) || err) });
+        }
+      };
+    }
+
+    // Worker script: Turf (already SRI-verified by the page), then this engine region sliced
+    // from the page's script text, then the message handler. The marker strings are split so
+    // this function does not match them itself.
+    function buildOptimizeWorkerSource(turfText, appScriptText) {
+      const start = appScriptText.indexOf('// ── Coordinate' + ' helpers');
+      const end = appScriptText.indexOf('// @bench-' + 'extract-end');
+      if (start < 0 || end <= start) throw new Error('engine code not found in the page script');
+      return [turfText, 'let drawnExclusions = [];', appScriptText.slice(start, end), 'optimizeWorkerMain(self);'].join('\n;\n');
     }
 
     // @bench-extract-end — everything above (from "Coordinate helpers") is pure
@@ -1597,10 +1660,11 @@
     }
 
     function deleteExclusion(index) {
+      const note = cancelOptimizeForChange();
       exclusionItems.removeLayer(drawnExclusions[index]);
       drawnExclusions.splice(index, 1);
       updateExclusionsList();
-      if (polyResults.size > 0) setStatus('Exclusion zone removed. Recalculate to apply.', 'info');
+      if (polyResults.size > 0 || note) setStatus(`Exclusion zone removed. Recalculate to apply.${note}`, 'info');
     }
 
     function updateExclusionsList() {
@@ -1812,6 +1876,7 @@
       if (!hull) { setStatus('Could not compute boundary — try selecting more features.', ''); return; }
 
       const lyr = L.geoJSON(hull, { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.12, weight: 2 }).getLayers()[0];
+      const note = cancelOptimizeForChange();
       drawnPolygons.push(lyr);
       drawnItems.addLayer(lyr);
 
@@ -1822,7 +1887,7 @@
       document.getElementById('optBtn').disabled  = false;
       document.getElementById('rectSelectBtn').disabled = false;
       const n = drawnPolygons.length;
-      setStatus(`Polygon created from ${geojsonFeatures.length} selected features. ${n} area${n !== 1 ? 's' : ''} total.`, 'info');
+      setStatus(`Polygon created from ${geojsonFeatures.length} selected features. ${n} area${n !== 1 ? 's' : ''} total.${note}`, 'info');
     }
 
     function analyseArcSelection() {
@@ -2307,66 +2372,170 @@
       }, 30);
     }
 
+    // ── Optimize (fase 0B.4: in a Web Worker) ─────────────────────────────────
+    // Each area gets its own rotation and offset (optimizeZone, ~0.3–10 s per area). The search
+    // runs in ONE Web Worker, created per run and terminated when it ends, so the page never
+    // freezes; the worker reports progress per area and within an area. The main thread only
+    // renders each area's result (one placement run). Cancel terminates the worker at once:
+    // areas finished before the cancel keep their new layout and setting, every other area keeps
+    // its previous layout. If the worker cannot be created, the search falls back to the main
+    // thread (one area per tick; the page pauses during each area, Cancel works between areas).
+    let optimizeRun = null;            // the running Optimize, or null
+    let optimizeWorkerSource = null;   // Promise<string>: worker script, built once per page load
+
+    // This script's own text: the worker runs the engine region sliced from it.
+    const APP_SCRIPT_TEXT = document.currentScript ? document.currentScript.textContent : '';
+
+    // Turf is fetched with the SAME integrity hash as its <script> tag (importScripts cannot check
+    // SRI); the browser normally serves it from its cache.
+    function getOptimizeWorkerSource() {
+      if (!optimizeWorkerSource) {
+        optimizeWorkerSource = (async () => {
+          const tag = document.querySelector('script[src*="/@turf/turf@"][integrity]');
+          if (!tag) throw new Error('Turf script tag not found');
+          const res = await fetch(tag.src, { integrity: tag.integrity, mode: 'cors', credentials: 'omit' });
+          if (!res.ok) throw new Error(`Turf could not be loaded (HTTP ${res.status})`);
+          return buildOptimizeWorkerSource(await res.text(), APP_SCRIPT_TEXT);
+        })();
+        optimizeWorkerSource.catch(() => { optimizeWorkerSource = null; }); // retry next time
+      }
+      return optimizeWorkerSource;
+    }
+
+    function setOptimizeRunning(on) {
+      const none = drawnPolygons.length === 0;
+      document.getElementById('calcBtn').disabled = on || none;
+      document.getElementById('optBtn').disabled = on || none;
+      document.getElementById('cancelOptBtn').style.display = on ? '' : 'none';
+    }
+
+    function stopOptimizeWorker(run) {
+      if (run.worker) { run.worker.terminate(); run.worker = null; }
+      if (run.url) { URL.revokeObjectURL(run.url); run.url = null; }
+    }
+
     function optimize() {
-      if (drawnPolygons.length === 0) return;
+      if (drawnPolygons.length === 0 || optimizeRun) return;
       const targetIndices = getTargetPolyIndices();
       const straight = document.getElementById('straightPaths').checked;
       const placer = straight ? runPlacementStraight : runPlacement;
-
-      // Each area gets its own rotation and offset (optimizeZone): ~0.3–3 s per area.
-      // Areas are processed one at a time so the status bar can show progress.
       const targets = targetIndices ? [...targetIndices] : drawnPolygons.map((_, i) => i);
       const zoneGeos = drawnPolygons.map(p => p.toGeoJSON());
       const overlaps = drawnPolygons.map((_, i) => zoneOverlapExclusions(zoneGeos, i));
-      const buttons = ['calcBtn', 'optBtn'].map(id => document.getElementById(id));
-      buttons.forEach(b => { b.disabled = true; });
-      if (!targetIndices) resetSpatialState();
-      let k = 0, runs = 0;
+      const zoneProducts = targets.map(i => getProductForPoly(i));
+      // next: index into targets of the first area not finished yet (areas finish in order).
+      const run = { targets, targetIndices, straight, next: 0, runs: 0, worker: null, url: null, mainThread: '' };
+      optimizeRun = run;
+      setOptimizeRunning(true);
 
-      const next = () => {
-        if (k === targets.length) return finish();
+      const progress = (k, pct) => setStatus(
+        `Optimizing area ${targets[k] + 1} (${k + 1} of ${targets.length}) — ${pct} %${run.mainThread ? ' · on the main thread: ' + run.mainThread : ''}`, 'busy');
+
+      const apply = (k, best) => {
         const i = targets[k];
-        setStatus(`Optimizing area ${i + 1} (${k + 1} of ${targets.length})…`, 'busy');
-        setTimeout(() => {
-          const product = getProductForPoly(i);
-          const best = optimizeZone(drawnPolygons[i], product, overlaps[i], placer);
-          runs += best.runs;
-          polySettings.set(i, { angleDeg: best.angleDeg, offX: best.offX, offY: best.offY });
-          clearPolyLayers(i);
-          renderBlocks(placer(drawnPolygons[i], best.angleDeg, best.offX, best.offY, product, overlaps[i]), i, product);
-          if (targetIndices) selectAllInPolygon(i);
-          k++;
-          next();
-        }, 30);
+        run.runs += best.runs;
+        run.next = k + 1;
+        polySettings.set(i, { angleDeg: best.angleDeg, offX: best.offX, offY: best.offY });
+        clearPolyLayers(i);
+        renderBlocks(placer(drawnPolygons[i], best.angleDeg, best.offX, best.offY, zoneProducts[k], overlaps[i]), i, zoneProducts[k]);
+        if (targetIndices) selectAllInPolygon(i);
+        if (run.next < targets.length) progress(run.next, 0);
       };
 
-      const finish = () => {
-        buttons.forEach(b => { b.disabled = false; });
-        if (targets.length === 1) {
-          const s = polySettings.get(targets[0]);
-          document.getElementById('rotation').value = s.angleDeg;
-          document.getElementById('offsetX').value  = s.offX;
-          document.getElementById('offsetY').value  = s.offY;
-        }
-        updateExportSection();
-        updateAreasList();
-        const { totalBlocks: count, totalSpaces: spaces } = getTotalStats();
-        document.getElementById('totalSpaces').textContent = spaces.toLocaleString('nl-NL');
-        document.getElementById('totalBlocks').textContent = count;
-        document.getElementById('bestRot').textContent = rotationSummary();
-        document.getElementById('optimal-badge').style.display = 'inline';
-
-        const modeLabel = straight ? ' · straight paths' : '';
-        const scopeLabel = targetIndices ? ` · ${targetIndices.size} area${targetIndices.size !== 1 ? 's' : ''}` : '';
-        setStatus(
-          spaces > 0
-            ? `Best found per area: ${count} groups (${spaces} spaces)${modeLabel}${scopeLabel} · ${runs.toLocaleString('nl-NL')} layouts tried.${limitationSuffix()}`
-            : 'Nothing fits. Try a larger polygon.',
-          spaces > 0 ? 'ok' : ''
-        );
+      // Fallback without a worker: the pre-0B.4 path, one area per tick.
+      const runOnMainThread = reason => {
+        run.mainThread = reason;
+        const step = () => {
+          if (optimizeRun !== run) return; // cancelled
+          if (run.next === targets.length) return finishOptimize(run, 'done');
+          progress(run.next, 0);
+          setTimeout(() => {
+            if (optimizeRun !== run) return;
+            const k = run.next, i = targets[k];
+            apply(k, optimizeZone(drawnPolygons[i], zoneProducts[k], overlaps[i], placer));
+            step();
+          }, 30);
+        };
+        step();
       };
 
-      next();
+      progress(0, 0);
+      getOptimizeWorkerSource().then(src => {
+        if (optimizeRun !== run) return;
+        run.url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+        const worker = run.worker = new Worker(run.url);
+        worker.onmessage = e => {
+          const m = e.data;
+          if (optimizeRun !== run) return; // a message that was already queued before a cancel
+          if (m.type === 'progress') progress(m.k, Math.min(100, Math.floor(100 * m.runs / Math.max(1, m.planned))));
+          else if (m.type === 'zone') apply(m.k, m.result);
+          else if (m.type === 'done') finishOptimize(run, 'done');
+          else if (m.type === 'error') finishOptimize(run, 'error', m.message);
+        };
+        worker.onerror = e => { // could not start (e.g. blocked) or crashed: finish on the main thread
+          if (e && e.preventDefault) e.preventDefault();
+          if (optimizeRun !== run) return;
+          stopOptimizeWorker(run);
+          runOnMainThread(`the Web Worker failed (${(e && e.message) || 'unknown error'})`);
+        };
+        worker.postMessage({
+          type: 'optimize', placer: straight ? 'straight' : 'greedy',
+          exclusions: drawnExclusions.map(l => l.toGeoJSON()),
+          zones: targets.map((i, k) => ({ index: i, feature: zoneGeos[i], product: zoneProducts[k], overlaps: overlaps[i] })),
+        });
+      }).catch(err => {
+        if (optimizeRun !== run) return;
+        stopOptimizeWorker(run);
+        runOnMainThread(`Web Worker unavailable (${(err && err.message) || err})`);
+      });
+    }
+
+    function cancelOptimize() {
+      if (optimizeRun) finishOptimize(optimizeRun, 'cancelled');
+    }
+
+    // Areas or exclusion zones changed while Optimize runs: the search no longer matches the map.
+    // Returns a note for the caller's status message.
+    function cancelOptimizeForChange() {
+      if (!optimizeRun) return '';
+      finishOptimize(optimizeRun, 'cancelled');
+      return ' Optimize was cancelled because the areas or exclusion zones changed.';
+    }
+
+    // outcome: 'done' | 'cancelled' | 'error'
+    function finishOptimize(run, outcome, detail) {
+      if (optimizeRun !== run) return;
+      stopOptimizeWorker(run);
+      optimizeRun = null;
+      setOptimizeRunning(false);
+      const { targets, targetIndices, straight } = run;
+      if (outcome === 'done' && targets.length === 1) {
+        const s = polySettings.get(targets[0]);
+        document.getElementById('rotation').value = s.angleDeg;
+        document.getElementById('offsetX').value  = s.offX;
+        document.getElementById('offsetY').value  = s.offY;
+      }
+      updateExportSection();
+      updateAreasList();
+      updateSelectionDisplay();
+      const { totalBlocks: count, totalSpaces: spaces } = getTotalStats();
+      document.getElementById('totalSpaces').textContent = spaces.toLocaleString('nl-NL');
+      document.getElementById('totalBlocks').textContent = count;
+      document.getElementById('bestRot').textContent = rotationSummary();
+      document.getElementById('optimal-badge').style.display = outcome === 'done' ? 'inline' : 'none';
+
+      const kept = `${run.next} of ${targets.length} area${targets.length !== 1 ? 's' : ''} optimized and kept; the other areas keep their previous layout.`;
+      if (outcome === 'cancelled') return setStatus(`Optimize cancelled: ${kept}`, 'info');
+      if (outcome === 'error') return setStatus(`Optimize failed: ${detail}. ${kept}`, '');
+      const modeLabel = straight ? ' · straight paths' : '';
+      const scopeLabel = targetIndices ? ` · ${targetIndices.size} area${targetIndices.size !== 1 ? 's' : ''}` : '';
+      const where = run.mainThread ? ` Ran on the main thread: ${run.mainThread}.` : '';
+      setStatus(
+        spaces > 0
+          ? `Best found per area: ${count} groups (${spaces} spaces)${modeLabel}${scopeLabel} · ${run.runs.toLocaleString('nl-NL')} layouts tried.${limitationSuffix()}${where}`
+          : `Nothing fits. Try a larger polygon.${where}`,
+        spaces > 0 ? 'ok' : ''
+      );
     }
 
     // Rotation shown in the Results card: one angle if all calculated areas share it.
@@ -2411,6 +2580,7 @@
     }
 
     function clearAll() {
+      cancelOptimizeForChange();
       if (selectionRectMode) {
         selectionRectMode = false;
         if (rectDrawHandler) { rectDrawHandler.disable(); rectDrawHandler = null; }

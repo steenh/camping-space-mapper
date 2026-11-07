@@ -155,3 +155,64 @@ test('escaping: user-typed product names are escaped before innerHTML', () => {
 test('engine region has the explicit extract marker', () => {
   assert.ok(html.includes('// @bench-extract-end'));
 });
+
+// ── Optimize in a Web Worker (fase 0B.4) ───────────────────────────────────────
+const fnBody = name => {
+  const start = html.indexOf(`function ${name}(`);
+  assert.ok(start > 0, `function ${name} not found`);
+  const next = html.indexOf('\n    function ', start + 1);
+  return html.slice(start, next > 0 ? next : undefined);
+};
+
+test('optimize: optimizeZone runs on the main thread only in the explicit fallback path', () => {
+  const engineEnd = html.indexOf('// @bench-extract-end');
+  const calls = [...html.matchAll(/\boptimizeZone\(/g)].map(m => m.index).filter(i => i > engineEnd);
+  assert.equal(calls.length, 1, 'exactly one optimizeZone call outside the engine region');
+  const body = fnBody('optimize');
+  const fallback = body.indexOf('const runOnMainThread = ');
+  const workerStart = body.indexOf('getOptimizeWorkerSource().then(');
+  const at = html.indexOf(body);
+  assert.ok(fallback > 0 && workerStart > fallback, 'fallback is defined before the worker path');
+  assert.ok(calls[0] > at + fallback && calls[0] < at + workerStart, 'the call is inside runOnMainThread');
+  // The worker path: one Worker from a Blob, terminated when the run ends; fallback with a status note.
+  assert.match(body, /new Worker\(run\.url\)/);
+  assert.match(body, /URL\.createObjectURL\(new Blob\(\[src\]/);
+  assert.match(fnBody('stopOptimizeWorker'), /run\.worker\.terminate\(\)/);
+  assert.match(fnBody('finishOptimize'), /stopOptimizeWorker\(run\)/);
+  assert.match(body, /runOnMainThread\(`Web Worker unavailable/);
+  assert.match(body, /on the main thread: /, 'status says when the fallback runs');
+  assert.match(fnBody('finishOptimize'), /Ran on the main thread: /);
+});
+
+test('optimize: progress per area and within an area; stale messages are ignored', () => {
+  const body = fnBody('optimize');
+  assert.match(body, /Optimizing area \$\{targets\[k\] \+ 1\} \(\$\{k \+ 1\} of \$\{targets\.length\}\) — \$\{pct\} %/);
+  assert.match(body, /Math\.min\(100, Math\.floor\(100 \* m\.runs \/ Math\.max\(1, m\.planned\)\)\)/);
+  assert.match(body, /if \(optimizeRun !== run\) return; \/\/ a message that was already queued before a cancel/);
+});
+
+test('optimize: a Cancel control stops the run; finished areas are kept, the rest keep their layout', () => {
+  assert.match(html, /<button[^>]*id="cancelOptBtn"[^>]*onclick="cancelOptimize\(\)"[^>]*>Cancel<\/button>/);
+  assert.match(fnBody('setOptimizeRunning'), /cancelOptBtn'\)\.style\.display = on \? '' : 'none'/);
+  assert.match(fnBody('cancelOptimize'), /finishOptimize\(optimizeRun, 'cancelled'\)/);
+  assert.match(fnBody('finishOptimize'), /Optimize cancelled: \$\{kept\}/);
+  assert.doesNotMatch(fnBody('optimize'), /resetSpatialState\(\)/, 'Optimize must not wipe layouts up front (cancel keeps them)');
+  // Any change to areas or exclusion zones cancels a running Optimize.
+  for (const where of ['L.Draw.Event.EDITED', 'L.Draw.Event.DELETED']) {
+    const i = html.indexOf(`map.on(${where}`);
+    assert.match(html.slice(i, i + 200), /cancelOptimizeForChange\(\)/, where);
+  }
+  for (const name of ['deleteExclusion', 'createPolygonFromArcSelection', 'clearAll']) {
+    assert.match(fnBody(name), /cancelOptimizeForChange\(\)/, name);
+  }
+  const created = html.slice(html.indexOf('map.on(L.Draw.Event.CREATED'), html.indexOf('map.on(L.Draw.Event.EDITED'));
+  assert.equal(created.match(/cancelOptimizeForChange\(\)/g).length, 2, 'new exclusion zone and new area');
+});
+
+test('optimize worker: Turf comes from an SRI-checked fetch of the pinned tag, never importScripts', () => {
+  const src = fnBody('getOptimizeWorkerSource');
+  assert.match(src, /document\.querySelector\('script\[src\*="\/@turf\/turf@"\]\[integrity\]'\)/);
+  assert.match(src, /fetch\(tag\.src, \{ integrity: tag\.integrity, mode: 'cors', credentials: 'omit' \}\)/);
+  assert.doesNotMatch(html, /importScripts\s*\(/, 'importScripts has no SRI');
+  assert.match(html, /const APP_SCRIPT_TEXT = document\.currentScript \? document\.currentScript\.textContent : ''/);
+});
