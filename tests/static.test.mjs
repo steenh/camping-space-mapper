@@ -130,6 +130,12 @@ test('layer status: empty layer, authorization error and loading error are told 
   assert.equal(c(null, NaN).state, 'error');
 });
 
+test('layer status: the count check sends the token (esri-leaflet ignores options.token on L.esri.query)', () => {
+  const fn = html.slice(html.indexOf('function checkArcLayer()'), html.indexOf('function setArcLayerStatus('));
+  assert.match(fn, /\.token\(arcToken\)/, 'checkArcLayer must call .token(arcToken)');
+  assert.doesNotMatch(html, /L\.esri\.query\(\{[^}]*\btoken\s*:/, 'never pass the token only in L.esri.query options');
+});
+
 test('layer status: UI shows each state distinctly and ends the session on authorization errors', () => {
   assert.match(html, /id="arcLayerStatus"/);
   assert.match(html, /id="arcAuthMessage"/);
