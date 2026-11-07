@@ -857,12 +857,15 @@
     }
 
     // A product that would make the sweep loops stall or misbehave is rejected up front.
+    // Bounds are guards against runaway loops, not planning rules: the sweep steps by the
+    // space size, so a tiny space (e.g. 0.001 m) or a huge block would freeze the tab.
+    // They match the product dialog's input ranges (space 0.5–50 m, cols ≤ 20, rows ≤ 10).
     function isValidProduct(p) {
-      const pos = v => typeof v === 'number' && Number.isFinite(v) && v > 0;
-      const nonNeg = v => v === undefined || (typeof v === 'number' && Number.isFinite(v) && v >= 0);
-      const count = v => Number.isInteger(v) && v >= 1;
-      return !!p && pos(p.spaceW) && pos(p.spaceH) && count(p.maxCols) && count(p.maxRows)
-        && typeof p.pathW === 'number' && Number.isFinite(p.pathW) && p.pathW >= 0 && nonNeg(p.spaceGap);
+      const num = (v, lo, hi) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
+      const count = (v, hi) => Number.isInteger(v) && v >= 1 && v <= hi;
+      return !!p && num(p.spaceW, 0.5, 50) && num(p.spaceH, 0.5, 50)
+        && count(p.maxCols, 20) && count(p.maxRows, 10)
+        && num(p.pathW, 0, 50) && (p.spaceGap === undefined || num(p.spaceGap, 0, 20));
     }
 
     // Overlap between zone `index` and every lower-indexed zone, as [lng, lat] outer rings.
@@ -1929,7 +1932,7 @@
       // Negative or fractional values would make the placement sweep stall.
       if (!isValidProduct({ spaceW, spaceH, maxCols, maxRows, pathW, spaceGap })) {
         document.getElementById('pError').textContent =
-          'Width and height must be > 0, max cols/rows whole numbers ≥ 1, path width and gap ≥ 0.';
+          'Space width/height 0.5–50 m, max cols 1–20, max rows 1–10 (whole numbers), path 0–50 m, gap 0–20 m.';
         return;
       }
       document.getElementById('pError').textContent = '';

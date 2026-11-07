@@ -19,7 +19,7 @@ const FORWARDED_PARAMS = ['client_id', 'code', 'grant_type', 'redirect_uri', 'co
 const json = (status, body) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-const list = value => String(value || '').split(',').map(s => s.trim()).filter(Boolean);
+const list = value => String(value || '').split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean);
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -44,11 +44,18 @@ export async function onRequestPost(context) {
   const forward = new URLSearchParams();
   for (const key of FORWARDED_PARAMS) if (params.has(key)) forward.set(key, params.get(key));
 
-  const upstream = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: forward.toString(),
-  });
+  let upstream;
+  try {
+    // redirect: 'manual' — the body carries the authorization code and PKCE verifier.
+    upstream = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: forward.toString(),
+      redirect: 'manual',
+    });
+  } catch (_e) {
+    return json(502, { error: 'ArcGIS portal could not be reached' });
+  }
 
   const text = await upstream.text();
   return new Response(text, { status: upstream.status, headers: { 'Content-Type': 'application/json' } });

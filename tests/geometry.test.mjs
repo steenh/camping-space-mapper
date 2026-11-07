@@ -125,6 +125,9 @@ test('guard: invalid products and degenerate zones return quickly with no blocks
       { ...fx.PRODUCTS.GAP_5x10, pathW: -60 },
       { ...fx.PRODUCTS.GAP_5x10, maxCols: 0 },
       { ...fx.PRODUCTS.GAP_5x10, spaceW: NaN },
+      { ...fx.PRODUCTS.GAP_5x10, spaceW: 0.001 },     // tiny step: would freeze the sweep
+      { ...fx.PRODUCTS.GAP_5x10, maxCols: 1000000 },  // huge block search
+      { ...fx.PRODUCTS.GAP_5x10, maxRows: 2.5 },
     ];
     const out = [];
     for (const p of bad) for (const alg of ['runPlacement', 'runPlacementStraight'])
@@ -135,5 +138,14 @@ test('guard: invalid products and degenerate zones return quickly with no blocks
   assert.ok(!res.timedOut, 'placement hung on invalid input');
   assert.ok(!res.error, res.error);
   assert.ok(res.value.out.every(n => n === 0), `expected 0 spaces for invalid input, got ${res.value.out}`);
-  assert.deepEqual(res.value.valid, [false, false, false, false, false]);
+  assert.deepEqual(res.value.valid, [false, false, false, false, false, false, false, false]);
+});
+
+test('guard: the products used in the app and the fixtures are valid', () => {
+  const engine = loadEngine(INDEX);
+  for (const p of Object.values(PRODUCTS)) assert.ok(engine.isValidProduct(p), p.name);
+  // Edges of the allowed ranges (product dialog: space 0.5–50 m, cols ≤ 20, rows ≤ 10).
+  assert.ok(engine.isValidProduct({ spaceW: 0.5, spaceH: 50, maxCols: 20, maxRows: 10, pathW: 0, spaceGap: 0 }));
+  assert.ok(!engine.isValidProduct({ spaceW: 0.49, spaceH: 10, maxCols: 10, maxRows: 2, pathW: 5 }));
+  assert.ok(!engine.isValidProduct({ spaceW: 5, spaceH: 10, maxCols: 21, maxRows: 2, pathW: 5 }));
 });

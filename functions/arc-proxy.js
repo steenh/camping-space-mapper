@@ -16,7 +16,7 @@ const json = (status, body) =>
 
 function allowedOrigins(request, env) {
   const self = new URL(request.url).origin;
-  const extra = String((env && env.ALLOWED_ORIGINS) || '').split(',').map(s => s.trim()).filter(Boolean);
+  const extra = String((env && env.ALLOWED_ORIGINS) || '').split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean);
   return [self, ...extra];
 }
 
@@ -48,11 +48,18 @@ export async function onRequestPost(context) {
   }
 
   const body = await request.text();
-  const upstream = await fetch(targetUrl.href, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Referer': origin + '/' },
-    body,
-  });
+  let upstream;
+  try {
+    // redirect: 'manual' — the body carries the user's token; it must never follow a redirect elsewhere.
+    upstream = await fetch(targetUrl.href, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Referer': origin + '/' },
+      body,
+      redirect: 'manual',
+    });
+  } catch (_e) {
+    return json(502, { error: 'ArcGIS could not be reached' });
+  }
 
   const text = await upstream.text();
   return new Response(text, { status: upstream.status, headers: { 'Content-Type': 'application/json' } });

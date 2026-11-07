@@ -77,9 +77,19 @@ test('arc-proxy: forwards an allowed edit call unchanged, without CORS headers',
   assert.equal(calls[0].init.headers.Referer, `${SITE}/`);
 });
 
-test('arc-proxy: ALLOWED_ORIGINS adds origins (e.g. local dev)', async () => {
-  const r = await proxyReq(ALLOWED_TARGET, { origin: 'http://localhost:8788', env: { ARC_PROXY_ENABLED: 'true', ALLOWED_ORIGINS: 'http://localhost:8788' } });
-  assert.equal(r.status, 200);
+test('arc-proxy: ALLOWED_ORIGINS adds origins (e.g. local dev), trailing slash tolerated', async () => {
+  const env = { ARC_PROXY_ENABLED: 'true', ALLOWED_ORIGINS: 'http://localhost:8788/ , https://other.example' };
+  assert.equal((await proxyReq(ALLOWED_TARGET, { origin: 'http://localhost:8788', env })).status, 200);
+  assert.equal((await proxyReq(ALLOWED_TARGET, { origin: 'https://other.example', env })).status, 200);
+});
+
+test('arc-proxy and arc-token: never follow redirects; unreachable upstream gives 502', async () => {
+  await proxyReq(ALLOWED_TARGET);
+  await tokenReq(VALID);
+  assert.deepEqual(calls.map(c => c.init.redirect), ['manual', 'manual']);
+  globalThis.fetch = async () => { throw new TypeError('network down'); };
+  assert.equal((await proxyReq(ALLOWED_TARGET)).status, 502);
+  assert.equal((await tokenReq(VALID)).status, 502);
 });
 
 const tokenReq = (params, { origin = SITE, env = {} } = {}) => {
