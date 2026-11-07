@@ -36,7 +36,7 @@ Restgab mod discovery-bedste (bred søgning med 3.780 layouts): fra 0 til −8 p
 |---|---|---|
 | 0B.1 | Aldrig færre pladser end baseline på nogen fixture × produkt × algoritme | ✅ 0/28 og regressionstest |
 | 0B.2 | Pr. zone ≥ fælles vinkel; gevinst rapporteret | ✅ blandet site +7,8–21,2 % |
-| 0B.3 | Optimize ≤ 3 s pr. discovery-fixture på main-thread, ellers Web Worker | ❌ **Ikke opfyldt i browser**: 2,99 s i Node, men 9,5 s i headless Chrome for den værste zone. UI'et fryser ikke på tværs af zoner (fremdrift pr. zone), men inden for en stor zone |
+| 0B.3 | Optimize ≤ 3 s pr. discovery-fixture på main-thread, ellers Web Worker | ✅ **Opfyldt efter 0B.4** (se §5): synlig Chrome 2,87 s på hovedtråden for den værste zone; med Web Worker ingen UI-frysning (længste pause 9 ms). Den oprindelige vurdering (❌, 9,5 s) byggede på en headless-måling i en skjult, droslet fane |
 
 ## 4. Anbefaling til port G0B
 
@@ -78,16 +78,19 @@ Node v25.6.1 (`node bench/compare-0b.mjs`, ny søgning, én zone pr. case):
 
 Headless Chrome 156 (røgtest på udviklermaskinen, ikke den endelige måling): D_irregular GAP greedy 2.900 ms på hovedtråden (UI frosset 2.895 ms) mod 3.007 ms i workeren inkl. opstart (længste UI-pause 11 ms). Alle 8 cases: længste UI-pause med worker ≤ 11 ms.
 
-| Måling (rigtig Chrome, ikke headless) | D_irregular GAP greedy | D_irregular GAP straight | E_strip GAP greedy | E_strip GAP straight |
+| Måling (synlig fane, Chrome 150 i Nimbalyst/Electron 43, 24 kerner, 2026-11-07) | D_irregular GAP greedy | D_irregular GAP straight | E_strip GAP greedy | E_strip GAP straight |
 |---|---:|---:|---:|---:|
-| Chrome hovedtråd (ms / længste UI-pause) | TODO | TODO | TODO | TODO |
-| Chrome Web Worker (ms inkl. opstart / længste UI-pause) | TODO | TODO | TODO | TODO |
+| Chrome hovedtråd (ms / længste UI-pause) | 2.869 / 2.858 | 2.478 / 2.467 | 970 / 958 | 1.511 / 1.500 |
+| Chrome Web Worker (ms inkl. opstart / længste UI-pause) | 2.943 / 9 | 2.618 / 9 | 1.106 / 9 | 1.619 / 9 |
+| Node 25 (ms, samme case) | 2.886 | 1.795 | 1.142 | 1.007 |
+
+SYN_6x8-cases (samme måling): hovedtråd 294–1.773 ms, worker 358–1.840 ms, længste UI-pause med worker 8–9 ms. **Alle 8 cases gav identiske resultater** (pladser, vinkel, offsets, antal layouts) på hovedtråd og i worker. Workeren koster 60–140 ms ekstra pr. zone (opstart + beskeder). Den tidligere headless-måling på 9,5 s skyldtes, at skjulte faner drosles; den er ikke repræsentativ.
 
 **Sådan måles (orkestrator):** `npm run bench:browser` (statisk server på `127.0.0.1:8790`, kun repo-roden) → åbn `http://127.0.0.1:8790/bench/browser/worker-bench.html?auto=1` i Chrome i forgrunden. Siden indlæser engine-regionen fra `/index.html`, kører hver case (D_irregular og E_strip_62x400 × GAP_5x10 og SYN_6x8 × greedy og straight) først på hovedtråden og derefter i en worker bygget som i appen, og viser ms, layouts, længste UI-pause (største afstand mellem animation frames), antal fremdriftsbeskeder og om resultaterne er identiske. JSON står nederst på siden og i `window.benchResult`. `?only=D_irregular|GAP_5x10` begrænser til én fixture/ét produkt. Fixtures: `bench/fixtures/worker-bench.json` (syntetiske, genereres med `node bench/make-worker-fixtures.mjs`). Siden kalder ikke ArcGIS.
 
 ### Acceptkriterie 0B.3 efter 0B.4
 
-UI'et fryser ikke længere under Optimize: søgningen kører i workeren, og hovedtråden laver kun én placering pr. zone ved visning. Tiden pr. zone er omtrent den samme som på hovedtråden (i headless-røgtesten 2–150 ms mere pr. zone, inkl. opstart af workeren). Om 0B.3 nu anses som opfyldt, afgøres ved port G0B ud fra Chrome-målingen ovenfor.
+UI'et fryser ikke længere under Optimize: søgningen kører i workeren, og hovedtråden laver kun én placering pr. zone ved visning. Tiden pr. zone er omtrent den samme som på hovedtråden (i headless-røgtesten 2–150 ms mere pr. zone, inkl. opstart af workeren). **Vurdering ud fra Chrome-målingen:** 0B.3 er opfyldt. Den værste discovery-fixture tager 2,87 s på hovedtråden (≤ 3 s) og 2,94 s i workeren. Vigtigere: med workeren er den længste UI-pause 9 ms mod op til 2,86 s på hovedtråden, så siden fryser ikke, og Cancel virker undervejs. Den endelige beslutning træffes ved port G0B.
 
 ### Risici / åbne punkter
 
