@@ -1,54 +1,59 @@
-// Cloudflare Pages Function — general proxy for ArcGIS REST API calls.
-// Accepts a `target` query parameter with the full ArcGIS endpoint URL.
-// Only forwards requests to the expected ArcGIS domain for safety.
+// Cloudflare Pages Function — narrow proxy for ArcGIS REST edit calls (POST /arc-proxy?target=…).
+//
+// Closed by default (DECISION-LOG B1): every request gets 403 unless the Pages environment sets
+// ARC_PROXY_ENABLED = "true". Its only caller, pushToArcGIS() in index.html, is disabled too
+// (ENABLE_ARCGIS_PUSH = false). When enabled, a request is forwarded only if:
+//   - it comes from this site's own origin (or one listed in ALLOWED_ORIGINS, comma-separated),
+//   - the target is https on the default port of the ArcGIS host, without credentials or query,
+//   - the path is one of the allowed edit operations on the Space_mapping layer.
+// Responses carry no CORS headers: the proxy is for same-origin use only.
 
 const ALLOWED_HOST = 'maps.roskilde-festival.dk';
+const ALLOWED_PATH = /^\/server\/rest\/services\/Hosted\/Space_mapping\/FeatureServer\/0\/(addFeatures|deleteFeatures|applyEdits)$/;
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+const json = (status, body) =>
+  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-export async function onRequestOptions() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+function allowedOrigins(request, env) {
+  const self = new URL(request.url).origin;
+  const extra = String((env && env.ALLOWED_ORIGINS) || '').split(',').map(s => s.trim()).filter(Boolean);
+  return [self, ...extra];
 }
 
 export async function onRequestPost(context) {
-  const target = new URL(context.request.url).searchParams.get('target');
-  if (!target) {
-    return new Response(JSON.stringify({ error: 'Missing target parameter' }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
+  const { request, env } = context;
+
+  if (!env || env.ARC_PROXY_ENABLED !== 'true') {
+    return json(403, { error: 'ArcGIS proxy is disabled' });
   }
+
+  const origin = request.headers.get('Origin');
+  if (!origin || !allowedOrigins(request, env).includes(origin)) {
+    return json(403, { error: 'Origin not allowed' });
+  }
+
+  const target = new URL(request.url).searchParams.get('target');
+  if (!target) return json(400, { error: 'Missing target parameter' });
 
   let targetUrl;
   try { targetUrl = new URL(target); } catch (_e) {
-    return new Response(JSON.stringify({ error: 'Invalid target URL' }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
+    return json(400, { error: 'Invalid target URL' });
   }
 
-  if (targetUrl.hostname !== ALLOWED_HOST) {
-    return new Response(JSON.stringify({ error: 'Target host not allowed' }), {
-      status: 403, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
+  // The URL parser has already resolved "." / ".." segments, so the path checked is the path fetched.
+  if (targetUrl.protocol !== 'https:' || targetUrl.hostname !== ALLOWED_HOST || targetUrl.port !== ''
+      || targetUrl.username || targetUrl.password || targetUrl.search || targetUrl.hash
+      || !ALLOWED_PATH.test(targetUrl.pathname)) {
+    return json(403, { error: 'Target not allowed' });
   }
 
-  const body    = await context.request.text();
-  const referer = context.request.headers.get('Referer') || context.request.headers.get('Origin') || '';
-  const upstream = await fetch(target, {
+  const body = await request.text();
+  const upstream = await fetch(targetUrl.href, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      ...(referer ? { 'Referer': referer } : {}),
-    },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Referer': origin + '/' },
     body,
   });
 
   const text = await upstream.text();
-  return new Response(text, {
-    status: upstream.status,
-    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-  });
+  return new Response(text, { status: upstream.status, headers: { 'Content-Type': 'application/json' } });
 }
