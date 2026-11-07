@@ -58,13 +58,17 @@ Bundlet blev serveret uændret (indhold identisk med `preview/g0`; kun linjeskif
 | L1 | PKCE-login | ✅ | Serverlog: `POST /arc-token 200`; `code`/`state` fjernet fra URL'en; verifier og state ryddet fra `sessionStorage` |
 | L2 | Token-håndtering | ✅ | Token kun i `sessionStorage` og hukommelse (ikke `localStorage` eller cookie); udløb ≈ 30 min; udløbstimer aktiv |
 | L3 | Lag 835 indlæses | ✅ (runde 2) | Lagstatus: "The layer is empty: it contains 0 features." Korrekt: RF27 er ikke tegnet endnu (count 0 og tomt extent med gyldigt token; ingen definition query; capabilities `Query`). I runde 2 er det verificeret, at optællingen sendes **med** token |
-| L4 | Valg og zone fra features | ⏭ Ikke mulig | Laget har ingen features i RF27 |
+| L4 | Valg og zone fra features | ✅ (RF26-data) | RF27-laget er tomt, så testen kørte på ejerens forslag mod `Reader/RF26/MapServer/835` ("GAT", 8.943 features; kræver token: 499 uden). Laget blev sat ind i hukommelsen med samme esri-leaflet-vej og samme valg-handlere som appen (ingen kodeændring). 6.682 features indlæst i udsnittet (13 forespørgsler, alle med token, ingen fejl). Appens box-select valgte 59 features, "Create polygon from selection" gav en zone på 4.491 m² (Polygon), Calculate placerede 53 pladser. "Analyse as product type" på de 59 features: 10×5 m, gap 0, sti 10 m, blok 4×10, rotation 7°. 0 skrivekald |
 | L5 | Calculate, Optimize, eksport | ✅ | Testzone: 765 → 810 pladser; eksport 810 features |
 | L6 | Ingen skrivning | ✅ | Med rigtigt token blev 6 af 6 skriveforsøg blokeret (fetch addFeatures, fetch applyEdits, XHR deleteFeatures, sendBeacon updateFeatures, esri addFeature, esri deleteFeature). 0 skrivekald i netværksloggen; `POST /arc-proxy` → 405 |
 | L7 | Tokenudløb | ✅ | Udløb sat til +3 s: sessionen sluttede efter 3,0 s med "Your ArcGIS session has expired. Log in again."; token slettet; layout bevaret |
 | L8 | Afvist token | ✅ (runde 2) | **Runde 1 fandt en fejl:** et manipuleret rigtigt token blev vist som "empty", fordi lagkontrollen sendte forespørgslen uden token (esri-leaflet 3.0.19 ignorerer `token` i `L.esri.query`-options), og lag 835 er anonymt læsbart. ArcGIS selv svarede korrekt 498. Rettet i `5570cf7` (`.token(arcToken)`) med regressionstest. **Runde 2:** samme manipulerede token, genindlæst side, gav "Not authorized (498): ArcGIS rejected your session. Log in again."; login vist; token slettet fra hukommelse og session; laget fjernet; optællingen sendt med token |
 | L9 | Oprydning | ✅ | Logget ud i fanen ("Test finished…"), `sessionStorage` tømt; testserveren på 8788 er stoppet; ENCORE-mappen er uberørt (genstartes af ejeren) |
 
-**Konklusion:** Alle kontroller er bestået undtagen L4, som ikke kan udføres, mens lag 835 er tomt (RF27). Testen fandt og fik rettet én fejl i fase 0-koden (lagkontrollen uden token).
+**Konklusion:** Alle kontroller L1–L9 er bestået (L4 med RF26-data, fordi RF27-laget er tomt). Testen fandt og fik rettet én fejl i fase 0-koden (lagkontrollen uden token).
+
+**Observationer fra RF26-data:**
+- `Reader/RF26/MapServer/836` ("Camping", 782 polygoner) ligner årets campingzoner og er en oplagt kandidat til zoneintegrationen (P7) og til historiske benchmark-fixtures (holdes uden for det offentlige repo).
+- Analysen af faktisk optegning (blok 4×10, sti 10 m) afviger fra appens standardprodukt (10×2, sti 5 m). Det understøtter, at parametre skal kalibreres mod virkelige data frem for at antages. Tallet er én stikprøve og skal bekræftes.
 
 **Nyt fund (til Team GIS):** Lag 835 ("GAT") er anonymt læsbart: metadata og `query` virker uden token. Laget er tomt nu, men når RF27-felterne tegnes, vil de sandsynligvis være offentligt tilgængelige, selvom appen kræver login. Det er en rettighedsindstilling i ArcGIS, ikke i appen.
