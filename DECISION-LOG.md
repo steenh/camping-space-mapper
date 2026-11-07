@@ -45,3 +45,20 @@ Beslutningstager: Steen Ritter (efter gennemgang af discovery sammen med ChatGPT
 ### Observeret ved opstart af fase 0
 
 - Der findes en parallel lokal branch `fase0/f5a2-arcgis-client-id` (worktree `E:/rf-fase0/pladser-f5a2`, commit `dbf2580`), som skifter ArcGIS client-ID til "Pladsplanlæggerens" egen OAuth-app, fordi appen er flyttet til `pladser.campops.net`. Fase 0-branchen rører ikke den linje, og de to branches forventes at kunne merges uden konflikt.
+
+## 2026-11-07 — Port G0
+
+Beslutningstager: Steen Ritter. Grundlag: [Fase 0-rapport](FASE-0-RAPPORT.md).
+
+| ID | Beslutning | Status | Betingelser |
+|---|---|---|---|
+| G0-a | Merge `fase0/sikring` til `master` | **Afventer** | Først diff-review og vellykket preview-test |
+| G0-b | Isoleret preview | **GO** | Skriveadgang til ArcGIS fuldt deaktiveret; preview beskyttet mod uvedkommende adgang |
+| G0-c | Produktionsdeploy | **NO-GO** | Kræver særskilt godkendelse |
+| G0-d | Fase 0B (O1+O2) | **GO** | Separat branch; ingen merge eller deploy; holdes adskilt fra G0 |
+| — | Offentligt repository | **Betinget GO** | Kun hvis gennemgang bekræfter, at kode, dokumenter, testdata og historik ikke indeholder secrets, følsomme RF-data eller interne oplysninger, der ikke bør offentliggøres |
+
+Yderligere krav (G0-1..8): selvstændig diff-review; adgangskontrol ikke kun Origin/CORS; preview-test inkl. PKCE-login, features, tokenudløb, Calculate, Optimize, eksport og dokumenteret skriveblokering; afklaring af `fase0/f5a2-arcgis-client-id` før preview; KB-01 registreret som kendt begrænsning; O1+O2 benchmarket mod oprindelig algoritme; reproducerbare, ikke-følsomme benchmarks; fase 0 og O1+O2 ikke i samme merge.
+
+Udførelse: se [G0-verifikation](G0-VERIFIKATION.md). Preview-miljø: Cloudflare Pages-projekt `csm-preview-g0` (personlig konto) bag Cloudflare Access-app "csm-preview-g0" (kun ejeren, session 8 t), bygget fra lokal integrationsbranch `preview/g0`.
+
