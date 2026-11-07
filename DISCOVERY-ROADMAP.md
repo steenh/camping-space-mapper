@@ -127,6 +127,8 @@ Den nuværende app forbliver i brug, indtil den nye overtager. Fase 0 ændrer **
 | 0.8 | Sandfærdighed og småfejl: "OPTIMAL" → "BEST FOUND", escaping af produktnavne, README ajourført | Statisk test + gennemsyn |
 | 0.9 | Lokal browser-røgtest (uden ArcGIS-login og uden skrivning) | Zone indlæses, Calculate, Optimize og eksport virker; MultiPolygon hænger ikke |
 
+**Status 2026-11-07:** Udført lokalt på `fase0/sikring`; alle leverancer 0.1–0.9 opfyldt. Se [Fase 0-rapport](FASE-0-RAPPORT.md).
+
 **Port G0:** Du gennemgår rapport og diff. Tre separate beslutninger: (a) merge til `master`, (b) produktionsdeploy, (c) start af fase 0B.
 
 ### Fase 0B — Søgeforbedring O1+O2 (S) · egen branch fra `fase0/sikring` · B2
