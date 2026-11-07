@@ -95,3 +95,12 @@ Erstatter: den tidligere plan om "sikker publicering" (Arkitektur §7, P1–P10,
 | G0B-worker | O1+O2 i Web Worker | **GO** | Separat branch; ingen beregning på hovedtråden; synlig fremdrift; annullering; deterministisk; ingen kapacitetsregression mod nuværende O1+O2; tidssammenligning Node / Chrome main thread / Chrome Web Worker; ingen unødvendig workerpool; ingen merge/deploy uden godkendelse |
 
 Prioritering: (1) G0-login og KB-02, (2) merge af sikker fase 0 efter bestået gate, (3) forbered kontrolleret produktionsrelease, (4) Web Worker parallelt.
+
+## 2026-11-07 — G0-a + G0-c samlet: merge og produktionsdeploy
+
+Beslutningstager: Steen Ritter. Grundlag: [Release-gate](RELEASE-GATE-PROD.md) F1 (produktionen er Git-koblet: merge til `master` = deploy) og F2 (login-test bestået).
+
+| ID | Beslutning | Status | Betingelser |
+|---|---|---|---|
+| G0-a/c | Merge `fase0/sikring` til `origin/master` og dermed produktionsdeploy via Cloudflares Git-integration (vej A) | **GO** | F3 (ingen O1+O2, ingen uventede ændringer) og F4 (alle tests inkl. SRI grønne på merge-commit) kontrolleres før push; verifikation efter deploy kun med læsning; ingen ArcGIS-skrivning (A9) |
+

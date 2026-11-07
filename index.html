@@ -2065,9 +2065,12 @@
 
     // Counts the features in the layer (a read-only query) to tell an empty layer apart
     // from an authorization or loading error.
+    // The token is set with .token(): esri-leaflet 3.0.19 ignores a `token` passed in the
+    // options of L.esri.query(), which made this check run anonymously (found in the G0 login
+    // test: a rejected token was reported as "empty" on the publicly readable layer 835).
     function checkArcLayer() {
       setArcLayerStatus({ state: 'loading' });
-      L.esri.query({ url: ARCGIS_LAYER_URL, token: arcToken }).where('1=1')
+      L.esri.query({ url: ARCGIS_LAYER_URL }).token(arcToken).where('1=1')
         .count((err, count) => setArcLayerStatus(classifyArcLayerResult(err, count)));
     }
 
