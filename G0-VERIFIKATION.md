@@ -66,7 +66,8 @@ Ingen nye blokerende fund. Små observationer:
 - **Konflikter:** Ingen. `git merge-tree` er rent; de to branches rører forskellige linjer.
 - **Kompatibilitet:** `/arc-token` tillader begge ID'er, og en test sikrer, at ID'et i `index.html` altid er tilladt.
 - **Preview:** Bygget fra `preview/g0` = `fase0/sikring` + f5a2, fordi login med det gamle ID ikke kan virke. `preview/g0` merges aldrig til master.
-- **Konsekvens for master:** Ifølge f5a2's commit-besked giver login på produktionen i dag "Invalid redirect_uri". Det er uafhængigt af fase 0. f5a2 skal merges (separat eller før/sammen med fase 0) for at login virker på `pladser.campops.net`. Efter merge bør det gamle ID fjernes fra allowlisten.
+- **Status på GitHub (opdateret):** `dbf2580` er **allerede på `origin/master`**; det er kun den lokale `master`, der er bagud (859849b). Fase 0 merger rent oven på `origin/master` (`git merge-tree fase0/sikring origin/master`: ingen konflikter).
+- **Konsekvens for G0-a:** Merge sker mod `origin/master` (inkl. f5a2). Efter merge kan det gamle ID fjernes fra allowlisten i `/arc-token`.
 
 ## 6. Login-test (krav 3e): hvad der mangler, og to veje
 
@@ -104,7 +105,7 @@ Scriptede kontroller under login-testen:
 | # | Fund / risiko | Alvor | Håndtering |
 |---|---|---|---|
 | R1 | Produktionen (master) har stadig den åbne proxy og den destruktive push, indtil fase 0 er deployet | **Høj** | Kræver G0-a og G0-c |
-| R2 | Login på produktionen er ifølge f5a2 brudt ("Invalid redirect_uri") | Middel | Merge af f5a2 (separat beslutning) |
+| R2 | f5a2 (nyt client-ID) er allerede på `origin/master`, mens den lokale `master` er bagud. Om produktionen kører med det, afhænger af dens deploy-vej (ukendt; ikke i denne Cloudflare-konto) | Lav | Afklar produktionens deploy-vej før G0-c |
 | R3 | KB-02: afvist token giver lydløs, tom lagvisning | Middel | Registreret; løses i ny app |
 | R4 | esri-leaflet sender tokenet som URL-parameter (havner i server- og proxy-logs) | Lav–middel | Kendt ArcGIS-mønster; ArcGIS REST JS med header/POST i ny app |
 | R5 | Skrivespærring er app- og proxy-niveau, ikke ArcGIS-niveau (KB-03) | Lav | ArcGIS-rettigheder; fase 5 |
@@ -120,6 +121,6 @@ Scriptede kontroller under login-testen:
 
 - Diff-reviewet har ingen blokerende fund, og alle automatiske og runtime-tests er grønne.
 - Login-testen er det eneste udestående kriterium, som du selv har stillet.
-- Merge f5a2 som separat beslutning før eller sammen med fase 0, så login virker på produktionen.
+- Merge mod `origin/master`, som allerede indeholder f5a2 (rent, verificeret). Fjern derefter det gamle client-ID fra allowlisten.
 - Push ikke branchen til GitHub før G0-c (§7).
 - Fase 0B merges ikke nu (separat port G0B, efter Web Worker).
