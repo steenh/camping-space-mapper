@@ -1,0 +1,16 @@
+{
+  "name": "camping-space-mapper",
+  "private": true,
+  "description": "Camping Space Mapper — dev tooling only (tests and benchmarks). The app itself has no build step.",
+  "scripts": {
+    "test": "node --test tests/",
+    "bench": "node bench/run-bench.mjs",
+    "bench:discovery": "node bench/discovery-compare.mjs"
+  },
+  "devDependencies": {
+    "@turf/turf": "6.5.0",
+    "geographiclib-geodesic": "^2.1.1",
+    "proj4": "^2.15.0"
+  },
+  "engines": { "node": ">=20" }
+}
