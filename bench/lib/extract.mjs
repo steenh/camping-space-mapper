@@ -17,7 +17,7 @@ const EXPORTS = [
   'runPlacement', 'runPlacementStraight', 'getFactors', 'toGeo', 'toLocal',
   'spaceCorners', 'blockCorners', 'polygonsOverlap',
   // Added in fase 0 (absent in older versions):
-  'zoneParts', 'zoneOverlapExclusions', 'unionAreaM2', 'isValidProduct',
+  'zoneParts', 'zoneOverlapExclusions', 'unionAreaM2', 'isValidProduct', 'overlapUnusedM2',
 ];
 
 export function extractRegion(html) {
